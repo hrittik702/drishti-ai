@@ -31,13 +31,13 @@ export default function AccessDeniedModal({
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/45 backdrop-blur-[2px] overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/45 backdrop-blur-[2px] overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose?.();
       }}
     >
       <div 
-        className="bg-white border border-slate-200 rounded-xl w-full max-w-[540px] max-h-[calc(100vh-32px)] shadow-xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
+        className="bg-white border border-slate-200 rounded-xl w-full max-w-[540px] max-h-[calc(100vh-24px)] sm:max-h-[calc(100vh-32px)] shadow-xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="access-denied-title"
@@ -62,7 +62,7 @@ export default function AccessDeniedModal({
 
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+            className="w-10 h-10 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
             aria-label="Close dialog"
             title="Close"
           >
@@ -149,14 +149,14 @@ export default function AccessDeniedModal({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between bg-slate-50/60 shrink-0">
+        <div className="px-5 py-3 border-t border-slate-100 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 bg-slate-50/60 shrink-0">
           <button
             type="button"
             onClick={() => {
               onClose?.();
               if (onViewAudit) onViewAudit();
             }}
-            className="text-[13px] font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
+            className="text-[13px] font-medium text-blue-600 hover:text-blue-800 flex items-center justify-center sm:justify-start gap-1 py-1.5 sm:py-0 transition-colors"
           >
             <span>View logged audit entry</span>
             <ArrowRight className="w-3.5 h-3.5" />
@@ -165,7 +165,7 @@ export default function AccessDeniedModal({
           <button
             type="button"
             onClick={onClose}
-            className="h-8 px-3.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs transition-colors"
+            className="h-10 sm:h-8 px-4 sm:px-3.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs transition-colors w-full sm:w-auto"
           >
             Acknowledge & Close
           </button>

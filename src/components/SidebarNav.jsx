@@ -39,6 +39,18 @@ export default function SidebarNav({
     if (setMobileOpen) setMobileOpen(false);
   };
 
+  // Close mobile drawer on Escape keypress
+  React.useEffect(() => {
+    if (!mobileOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setMobileOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileOpen, setMobileOpen]);
+
   const activeName = currentUser?.name || currentRole?.name || 'Officer';
   const activeRoleName = currentRole?.name || currentUser?.designation || 'Investigation Officer';
   const activeClearance = currentUser?.clearance || currentRole?.clearance || 'Confidential';
@@ -50,6 +62,7 @@ export default function SidebarNav({
         <div 
           onClick={() => setMobileOpen(false)} 
           className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-xs lg:hidden"
+          aria-label="Close navigation"
         />
       )}
 
@@ -60,13 +73,13 @@ export default function SidebarNav({
       `}>
         {/* Top Branding Section */}
         <div>
-          <div className="h-16 flex items-center justify-between px-5 border-b border-slate-100">
+          <div className="h-14 sm:h-16 flex items-center justify-between px-5 border-b border-slate-100">
             <CaseGuardLogo size="md" />
 
-            {/* Mobile Close Button */}
+            {/* Mobile Close Button (44x44 touch target) */}
             <button 
               onClick={() => setMobileOpen(false)}
-              className="lg:hidden text-slate-400 hover:text-slate-600 p-1"
+              className="lg:hidden w-11 h-11 flex items-center justify-center text-slate-400 hover:text-slate-600 rounded-lg -mr-2 transition-colors"
               aria-label="Close navigation"
             >
               <X className="w-5 h-5" />
@@ -83,7 +96,7 @@ export default function SidebarNav({
                 <button
                   key={item.id}
                   onClick={() => handleNavClick(item.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+                  className={`w-full flex items-center justify-between px-3 py-2.5 min-h-[44px] rounded-lg text-xs font-medium transition-colors ${
                     isActive
                       ? 'bg-slate-900 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'

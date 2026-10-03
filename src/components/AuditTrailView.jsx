@@ -267,7 +267,7 @@ export default function AuditTrailView({
 
       {/* Main Audit Table */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs flex flex-col">
-        <div className="overflow-x-auto min-h-[380px] max-h-[calc(100vh-230px)]">
+        <div className="hidden md:block overflow-x-auto min-h-[380px] max-h-[calc(100vh-230px)]">
           <table className="w-full text-left text-xs border-collapse">
             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold text-[11px] uppercase tracking-wider">
               <tr>
@@ -402,14 +402,77 @@ export default function AuditTrailView({
           </table>
         </div>
 
+        {/* Mobile Stacked Audit Cards (< 768px) */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {filteredLogs.length > 0 ? (
+            filteredLogs.map((log) => {
+              const statusInfo = getStatusInfo(log);
+              const isSelected = selectedEvent?.id === log.id;
+              const caseObj = resolveCase(log, cases);
+              const docObj = resolveDocument(log, documents);
+              const cleanCase = log.caseId && log.caseId !== 'N/A' && log.caseId !== 'GENERAL' 
+                ? String(log.caseId).replace(/^#/, '') 
+                : null;
+              const docName = docObj?.name || (log.targetType === 'DOCUMENT' && log.targetId && log.targetId !== 'N/A' ? log.targetId : null);
+
+              return (
+                <div
+                  key={log.id}
+                  onClick={() => setSelectedEvent(log)}
+                  className={`p-4 space-y-2 hover:bg-slate-50 transition-colors cursor-pointer ${
+                    isSelected ? 'bg-blue-50/70' : ''
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-semibold text-slate-900 text-xs">
+                      {formatActionName(log.action)}
+                    </span>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border shrink-0 ${statusInfo.badgeClass}`}>
+                      <span>{statusInfo.symbol}</span>
+                      <span>{statusInfo.label}</span>
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-slate-600 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="font-medium text-slate-800">{log.actorName || 'System'}</span>
+                    {cleanCase && (
+                      <span className="font-mono text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-[11px]">
+                        #{cleanCase}
+                      </span>
+                    )}
+                    {docName && (
+                      <span className="text-slate-500 truncate max-w-[200px]" title={docName}>
+                        {docName}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1.5 border-t border-slate-100 text-[11px] text-slate-400">
+                    <span className="font-mono">{formatTime(log.timestamp)}</span>
+                    <span className="text-blue-600 font-medium text-xs">Inspect →</span>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="p-8 text-center text-slate-400">
+              <History className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+              <div className="font-semibold text-slate-700 text-sm">No audit events found</div>
+              <p className="text-xs text-slate-500 mt-1">
+                No events match the current filter criteria.
+              </p>
+            </div>
+          )}
+        </div>
+
         {/* Table Footer */}
         <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 text-[11px] text-slate-500 flex items-center justify-between">
           <span>Showing {filteredLogs.length} of {auditLogs.length} logged events</span>
-          <span className="text-slate-400">Click any row to inspect event details</span>
+          <span className="text-slate-400 hidden sm:inline">Click any row to inspect event details</span>
         </div>
       </div>
 
-      {/* Right-Side Inspector Drawer */}
+      {/* Right-Side Inspector Drawer (Bottom Sheet on Mobile) */}
       {selectedEvent && (
         <>
           <div 
@@ -417,7 +480,7 @@ export default function AuditTrailView({
             onClick={() => setSelectedEvent(null)}
           />
           <aside 
-            className="fixed inset-y-0 right-0 z-50 w-full sm:w-[440px] bg-white border-l border-slate-200 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"
+            className="fixed inset-x-0 bottom-0 sm:inset-y-0 sm:right-0 sm:left-auto z-50 w-full sm:w-[440px] max-h-[88vh] sm:max-h-full rounded-t-2xl sm:rounded-none bg-white border-t sm:border-t-0 sm:border-l border-slate-200 shadow-2xl flex flex-col animate-in slide-in-from-bottom sm:slide-in-from-right duration-200"
             role="dialog"
             aria-label="Audit Event Details"
           >

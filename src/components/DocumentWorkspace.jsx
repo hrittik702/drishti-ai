@@ -423,26 +423,30 @@ export default function DocumentWorkspace({
           <>
             {/* Subtle backdrop overlay with blur */}
             <div 
-              className="absolute inset-0 z-30 bg-slate-900/10 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-150" 
+              className="fixed sm:absolute inset-0 z-40 sm:z-30 bg-slate-900/20 sm:bg-slate-900/10 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-150" 
               onClick={() => setDrawerOpen(false)}
               aria-label="Close Inspector"
             />
-            <aside className="absolute top-0 right-0 bottom-0 z-40 w-full sm:w-[380px] bg-white border-l border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-right duration-200">
-            
-            {/* Drawer Header */}
-            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0 bg-slate-50/80">
-              <div className="flex items-center space-x-2">
-                <Info className="w-4 h-4 text-blue-600" />
-                <span className="font-semibold text-sm text-slate-900">Document Inspector</span>
+            <aside className="fixed sm:absolute inset-x-0 bottom-0 sm:inset-y-0 sm:left-auto sm:right-0 z-50 sm:z-40 w-full sm:w-[380px] bg-white border-t sm:border-t-0 sm:border-l border-slate-200 rounded-t-2xl sm:rounded-none flex flex-col h-[85vh] sm:h-full max-h-[85vh] sm:max-h-full shadow-2xl animate-in slide-in-from-bottom sm:slide-in-from-right duration-200">
+              
+              {/* Drag pill for mobile */}
+              <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
+              {/* Drawer Header */}
+              <div className="px-4 py-2.5 sm:py-3 border-b border-slate-200 flex items-center justify-between shrink-0 bg-slate-50/80">
+                <div className="flex items-center space-x-2">
+                  <Info className="w-4 h-4 text-blue-600" />
+                  <span className="font-semibold text-sm text-slate-900">Document Inspector</span>
+                </div>
+                <button
+                  onClick={() => setDrawerOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 p-1.5 sm:p-1 min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-md"
+                  aria-label="Close drawer"
+                  title="Close drawer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <button
-                onClick={() => setDrawerOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-md"
-                title="Close drawer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
 
             {/* Drawer Tabs */}
             <div className="px-3 border-b border-slate-200 bg-slate-50 flex items-center space-x-1 overflow-x-auto text-xs shrink-0 select-none">

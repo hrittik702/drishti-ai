@@ -264,7 +264,7 @@ export default function IntegrityVerificationView({
 
       {/* 3. Document Table */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-        <div className="overflow-x-auto">
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-mono text-[11px] uppercase tracking-wider font-semibold select-none">
@@ -449,11 +449,93 @@ export default function IntegrityVerificationView({
             </tbody>
           </table>
         </div>
+
+        {/* Mobile Stacked Cards View (< 768px) */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {filteredDocuments.length > 0 ? (
+            filteredDocuments.map((doc) => {
+              const statusInfo = getIntegrityStatus(doc);
+              const isSelected = selectedDocId === doc.id;
+              const isVerifying = verifyingDocId === doc.id;
+
+              return (
+                <div
+                  key={doc.id}
+                  onClick={() => setSelectedDocId(doc.id)}
+                  className={`p-4 space-y-2.5 hover:bg-slate-50 transition-colors cursor-pointer ${
+                    isSelected ? 'bg-blue-50/40' : ''
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-slate-900 text-sm leading-tight break-words">
+                        {doc.name}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1 text-xs">
+                        <span className="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                          #{String(doc.caseId || 'N/A').replace(/^#/, '')}
+                        </span>
+                        <span className="font-mono text-[11px] text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                          {doc.currentVersion || 'V1'}
+                        </span>
+                        {doc.storedHash && (
+                          <span className="font-mono text-[11px] text-slate-400 select-all">
+                            {shortenHash(doc.storedHash, 6, 6)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border shrink-0 ${statusInfo.badgeClass}`}>
+                      {statusInfo.label}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                    <div className="flex items-center gap-1.5 text-slate-500 font-mono text-[11px]">
+                      <span>Verified:</span>
+                      <span>{formatLastVerified(doc.lastVerified, true)}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      {statusInfo.status === 'MISMATCH' ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDocId(doc.id)}
+                          className="px-3 py-1.5 min-h-[36px] bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors"
+                        >
+                          Investigate
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleVerifySingle(doc)}
+                          disabled={isVerifying}
+                          className="px-3 py-1.5 min-h-[36px] bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs transition-colors disabled:opacity-50"
+                        >
+                          {isVerifying ? 'Verifying...' : 'Verify'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="p-8 text-center text-slate-400">
+              <ShieldCheck className="w-8 h-8 text-slate-300 mx-auto mb-2 stroke-1" />
+              <div className="font-semibold text-slate-700 text-sm">No Documents Found</div>
+              <p className="text-xs text-slate-500 mt-1">
+                No documents match the specified search or filter criteria.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* 4. Inspector Slide-Over Drawer */}
+      {/* 4. Inspector Slide-Over Drawer (Bottom sheet on mobile) */}
       {selectedDoc && (
-        <div className="fixed inset-0 z-50 flex justify-end">
+        <div className="fixed inset-0 z-50 flex justify-end items-end sm:items-stretch">
           {/* Backdrop overlay */}
           <div
             className="fixed inset-0 bg-slate-900/30 backdrop-blur-2xs transition-opacity"
@@ -462,7 +544,7 @@ export default function IntegrityVerificationView({
 
           {/* Drawer content */}
           <div 
-            className="relative w-full sm:w-[440px] bg-white border-l border-slate-200 shadow-xl flex flex-col h-full z-10 animate-in slide-in-from-right duration-200"
+            className="relative w-full sm:w-[440px] bg-white border-t sm:border-t-0 sm:border-l border-slate-200 rounded-t-2xl sm:rounded-none shadow-xl flex flex-col h-[88vh] sm:h-full z-10 animate-in slide-in-from-bottom sm:slide-in-from-right duration-200"
             role="dialog"
             aria-modal="true"
             aria-label="Document Integrity Details"

@@ -27,9 +27,16 @@ if (typeof window !== 'undefined' && pdfjs && pdfjs.GlobalWorkerOptions) {
 }
 
 export default function PdfViewer({ blob, filename, onDownload }) {
+  const getInitialScale = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 640) {
+      return Math.min(1.0, Math.max(0.45, (window.innerWidth - 32) / 600));
+    }
+    return 1.15;
+  };
+
   const [numPages, setNumPages] = useState(null);
   const [pageNumber, setPageNumber] = useState(1);
-  const [scale, setScale] = useState(1.15);
+  const [scale, setScale] = useState(getInitialScale);
   const [loading, setLoading] = useState(true);
   const [useNativeFallback, setUseNativeFallback] = useState(false);
   const [fileData, setFileData] = useState(null);
@@ -139,7 +146,7 @@ export default function PdfViewer({ blob, filename, onDownload }) {
   }, [handleActivity]);
 
   const resetZoom = useCallback(() => {
-    setScale(1.15);
+    setScale(getInitialScale());
     handleActivity();
   }, [handleActivity]);
 

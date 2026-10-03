@@ -202,7 +202,7 @@ export default function CasesView({
 
               {/* Filter Popover Menu */}
               {filterMenuOpen && (
-                <div className="absolute right-0 mt-1.5 w-72 bg-white border border-slate-200 rounded-xl shadow-lg z-30 p-4 space-y-3.5 text-xs">
+                <div className="absolute right-0 mt-1.5 w-[calc(100vw-32px)] sm:w-72 max-w-sm bg-white border border-slate-200 rounded-xl shadow-lg z-30 p-4 space-y-3.5 text-xs">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                     <span className="font-semibold text-slate-900">Filter Cases</span>
                     {activeFiltersCount > 0 && (
@@ -640,17 +640,21 @@ export default function CasesView({
         </div>
       )}
 
-      {/* 4. SLIDE-OVER CASE INSPECTOR DRAWER */}
+      {/* 4. SLIDE-OVER CASE INSPECTOR DRAWER (BOTTOM SHEET ON MOBILE) */}
       {inspectingCase && (
-        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/40 backdrop-blur-xs flex justify-end">
+        <div 
+          className="fixed inset-0 z-50 overflow-hidden bg-slate-900/40 backdrop-blur-xs flex justify-end items-end sm:items-stretch"
+          onClick={() => setInspectingCase(null)}
+        >
           <div
-            className="w-full sm:w-[440px] bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col justify-between animate-in slide-in-from-right duration-200"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full sm:w-[440px] bg-white h-[88vh] sm:h-full rounded-t-2xl sm:rounded-none shadow-2xl border-t sm:border-t-0 sm:border-l border-slate-200 flex flex-col justify-between animate-in slide-in-from-bottom sm:slide-in-from-right duration-200"
             role="dialog"
             aria-modal="true"
             aria-label="Case Details"
           >
             {/* Drawer Header */}
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/70 shrink-0">
               <div className="flex items-center space-x-2">
                 <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
                   {formatCaseId(inspectingCase.caseNumber)}
@@ -661,7 +665,7 @@ export default function CasesView({
               </div>
               <button
                 onClick={() => setInspectingCase(null)}
-                className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
+                className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                 aria-label="Close dialog"
                 title="Close"
               >

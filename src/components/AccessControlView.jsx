@@ -39,6 +39,20 @@ export default function AccessControlView({
   const activeUser = currentUser || DEMO_USERS[0];
   const activeRole = currentRole || activeUser.role;
 
+  const mapRoleIdToMatrixKey = (roleId) => {
+    if (roleId === 'investigation_officer' || roleId === 'police_officer') return 'io';
+    if (roleId === 'legal_officer') return 'legal';
+    if (roleId === 'forensic_analyst') return 'fsl';
+    if (roleId === 'administrator') return 'admin';
+    return 'io';
+  };
+
+  const [selectedMobileRole, setSelectedMobileRole] = useState(() => mapRoleIdToMatrixKey(activeRole?.id));
+
+  useEffect(() => {
+    setSelectedMobileRole(mapRoleIdToMatrixKey(activeRole?.id));
+  }, [activeRole?.id]);
+
   // Click outside listener for Change Account menu
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -78,7 +92,7 @@ export default function AccessControlView({
         <button
           onClick={onTriggerUnauthorizedAccess}
           title="Verify policy enforcement against classified resource"
-          className="h-8 px-3 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-medium inline-flex items-center gap-1.5 transition-colors shadow-2xs shrink-0 self-start sm:self-auto"
+          className="h-9 sm:h-8 px-3 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-medium inline-flex items-center gap-1.5 transition-colors shadow-2xs shrink-0 self-start sm:self-auto"
         >
           <ShieldCheck className="w-4 h-4 text-slate-600" />
           <span>Verify Access Policy</span>
@@ -144,7 +158,7 @@ export default function AccessControlView({
               <button
                 type="button"
                 onClick={() => setAccountMenuOpen(!accountMenuOpen)}
-                className="h-8 px-3 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-medium inline-flex items-center gap-1.5 transition-colors shadow-2xs"
+                className="h-9 sm:h-8 px-3 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-medium inline-flex items-center gap-1.5 transition-colors shadow-2xs"
               >
                 <ArrowLeftRight className="w-3.5 h-3.5 text-slate-500" />
                 <span>Change Account</span>
@@ -170,7 +184,7 @@ export default function AccessControlView({
                             setCurrentRole(u.role);
                           }
                         }}
-                        className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-slate-50 text-xs transition-colors ${
+                        className={`w-full text-left px-3 py-2.5 min-h-[44px] flex items-center justify-between hover:bg-slate-50 text-xs transition-colors ${
                           isSelected ? 'bg-blue-50/50 font-semibold text-blue-900' : 'text-slate-700'
                         }`}
                       >
@@ -194,7 +208,7 @@ export default function AccessControlView({
                 type="button"
                 onClick={onLogout}
                 title="Sign out of current active session"
-                className="h-8 px-3 rounded-lg border border-slate-300 hover:border-red-200 bg-white hover:bg-red-50 text-slate-700 hover:text-red-700 text-xs font-medium inline-flex items-center gap-1.5 transition-colors shadow-2xs"
+                className="h-9 sm:h-8 px-3 rounded-lg border border-slate-300 hover:border-red-200 bg-white hover:bg-red-50 text-slate-700 hover:text-red-700 text-xs font-medium inline-flex items-center gap-1.5 transition-colors shadow-2xs"
               >
                 <LogOut className="w-3.5 h-3.5 text-slate-500" />
                 <span>Sign Out</span>
@@ -215,7 +229,8 @@ export default function AccessControlView({
           </p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+        {/* Desktop System Roles Table */}
+        <div className="hidden md:block bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -279,6 +294,58 @@ export default function AccessControlView({
             </table>
           </div>
         </div>
+
+        {/* Mobile System Roles Stacked Cards */}
+        <div className="md:hidden space-y-3">
+          {rolesList.map(r => {
+            const isActive = activeRole.id === r.id;
+            return (
+              <div 
+                key={r.id}
+                className={`bg-white border rounded-xl p-3.5 space-y-2.5 shadow-2xs transition-colors ${
+                  isActive ? 'border-blue-500 bg-blue-50/20' : 'border-slate-200'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 shrink-0">
+                      <RoleIcon role={r} className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-slate-900 text-xs sm:text-[13px]">
+                        {r.name}
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        {r.designation}
+                      </div>
+                    </div>
+                  </div>
+                  {isActive ? (
+                    <span className="inline-flex items-center space-x-1 text-[11px] font-medium text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                      <span>Active</span>
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-slate-400 font-normal shrink-0">
+                      Authorized
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-500 text-[11px]">Clearance:</span>
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border ${getClearanceBadgeClass(r.clearance)}`}>
+                      {r.clearance}
+                    </span>
+                  </div>
+                  <div className="text-slate-600 font-mono text-[11px]">
+                    {r.permissions.length} permissions
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Permission Matrix Table */}
@@ -292,7 +359,8 @@ export default function AccessControlView({
           </p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+        {/* Desktop Permission Matrix Table */}
+        <div className="hidden md:block bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -366,6 +434,47 @@ export default function AccessControlView({
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* Mobile Permission Matrix with Role Selector */}
+        <div className="md:hidden bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+          <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-2">
+            <label htmlFor="mobile-role-select" className="text-xs font-medium text-slate-700">
+              Role:
+            </label>
+            <select
+              id="mobile-role-select"
+              value={selectedMobileRole}
+              onChange={(e) => setSelectedMobileRole(e.target.value)}
+              className="bg-white border border-slate-300 rounded-lg py-1 px-2.5 text-xs text-slate-800 font-medium focus:outline-none focus:border-blue-500"
+            >
+              <option value="io">Investigation Officer</option>
+              <option value="legal">Legal Officer</option>
+              <option value="fsl">Forensic Analyst</option>
+              <option value="admin">System Administrator</option>
+            </select>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {permissionMatrix.map((row, idx) => {
+              const isAllowed = row[selectedMobileRole];
+              return (
+                <div key={idx} className="p-3 flex items-center justify-between gap-3 text-xs">
+                  <span className="text-slate-800 font-medium leading-relaxed">{row.permission}</span>
+                  {isAllowed ? (
+                    <span className="inline-flex items-center gap-1 text-emerald-700 font-medium shrink-0">
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Allowed</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-slate-400 font-normal shrink-0">
+                      <Minus className="w-3.5 h-3.5 text-slate-300" />
+                      <span>Denied</span>
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

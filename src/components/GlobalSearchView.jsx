@@ -222,7 +222,7 @@ export default function GlobalSearchView({
 
             {/* Filter Popover Menu */}
             {filterMenuOpen && (
-              <div className="absolute left-0 mt-1.5 w-72 bg-white border border-slate-200 rounded-xl shadow-lg z-30 p-4 space-y-3.5 text-xs">
+              <div className="absolute left-0 mt-1.5 w-[calc(100vw-32px)] sm:w-72 max-w-sm bg-white border border-slate-200 rounded-xl shadow-lg z-30 p-4 space-y-3.5 text-xs">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <span className="font-semibold text-slate-900">Filter Documents</span>
                   {activeFiltersCount > 0 && (
