@@ -162,9 +162,9 @@ export default function AuditTrailView({
       {/* Simple Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Audit Trail</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Verification Log</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Track document, access, integrity, version, and security events.
+            Immutable compliance checks, telemetry synchronizations, and access history.
           </p>
         </div>
 
@@ -172,7 +172,7 @@ export default function AuditTrailView({
           <button
             type="button"
             onClick={handleGenerateCertificate}
-            className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-lg text-xs font-medium shadow-2xs transition-colors"
+            className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-lg text-xs font-medium shadow-2xs transition-colors cursor-pointer"
             title="Generate Section 63 Admissibility Certificate"
           >
             <Scale className="w-3.5 h-3.5 text-slate-600" />
@@ -182,8 +182,8 @@ export default function AuditTrailView({
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-lg text-xs font-medium shadow-2xs transition-colors"
-            title="Print Audit Trail"
+            className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-lg text-xs font-medium shadow-2xs transition-colors cursor-pointer"
+            title="Print Verification Log"
           >
             <Printer className="w-3.5 h-3.5 text-slate-600" />
             <span>Print</span>
@@ -218,9 +218,9 @@ export default function AuditTrailView({
           onChange={(e) => setSelectedCaseFilter(e.target.value)}
           className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
         >
-          <option value="ALL">All Cases</option>
+          <option value="ALL">All Centres</option>
           {availableCases.map(c => (
-            <option key={c} value={c}>Case #{c}</option>
+            <option key={c} value={c}>{c}</option>
           ))}
         </select>
 
@@ -274,7 +274,7 @@ export default function AuditTrailView({
                 <th className="py-2.5 px-3.5 whitespace-nowrap w-[95px]">Time</th>
                 <th className="py-2.5 px-3.5 whitespace-nowrap">Actor</th>
                 <th className="py-2.5 px-3.5 whitespace-nowrap">Action</th>
-                <th className="py-2.5 px-3.5 whitespace-nowrap">Case / Document</th>
+                <th className="py-2.5 px-3.5 whitespace-nowrap">Centre / Evidence</th>
                 <th className="py-2.5 px-3.5 whitespace-nowrap w-[110px]">Status</th>
               </tr>
             </thead>
@@ -325,7 +325,7 @@ export default function AuditTrailView({
                                 e.stopPropagation();
                                 onSelectCase(caseObj);
                               }}
-                              title={`Open Case #${cleanCase}`}
+                              title={`Open Centre ${cleanCase}`}
                               className="font-mono text-blue-600 hover:text-blue-800 hover:underline font-medium"
                             >
                               #{cleanCase}
@@ -544,17 +544,17 @@ export default function AuditTrailView({
                 <div className="pt-2 flex items-start justify-between gap-2">
                   <span className="text-slate-500 font-normal">Role</span>
                   <span className="text-slate-800 font-medium text-right">
-                    {selectedEvent.role || 'Investigation Officer'}
+                    {selectedEvent.role || 'Compliance Officer'}
                   </span>
                 </div>
 
                 <div className="pt-2 flex items-start justify-between gap-2">
-                  <span className="text-slate-500 font-normal">Case</span>
+                  <span className="text-slate-500 font-normal">Centre</span>
                   {selectedCase && onSelectCase ? (
                     <button
                       type="button"
                       onClick={() => onSelectCase(selectedCase)}
-                      className="font-mono text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 font-medium"
+                      className="font-mono text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 font-medium cursor-pointer"
                     >
                       #{String(selectedEvent.caseId).replace(/^#/, '')}
                       <ExternalLink className="w-3 h-3" />
@@ -567,12 +567,12 @@ export default function AuditTrailView({
                 </div>
 
                 <div className="pt-2 flex items-start justify-between gap-2">
-                  <span className="text-slate-500 font-normal">Document</span>
+                  <span className="text-slate-500 font-normal">Evidence Record</span>
                   {selectedDoc && onViewDocument ? (
                     <button
                       type="button"
                       onClick={() => onViewDocument(selectedDoc)}
-                      className="text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 font-medium max-w-[220px] text-right truncate"
+                      className="text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 font-medium max-w-[220px] text-right truncate cursor-pointer"
                     >
                       <span className="truncate">{selectedDoc.name}</span>
                       <ExternalLink className="w-3 h-3 shrink-0" />

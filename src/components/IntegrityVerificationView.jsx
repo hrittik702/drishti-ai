@@ -18,8 +18,20 @@ import {
   History,
   Lock,
   Eye,
-  Briefcase
+  Briefcase,
+  Building2,
+  Cpu,
+  Camera,
+  Activity,
+  Radio,
+  Wifi,
+  WifiOff,
+  Sparkles,
+  ArrowUpRight
 } from 'lucide-react';
+import { INITIAL_CENTRES } from '../data/initialCentres.js';
+import { loadLocal } from '../services/db.js';
+import { formatCentreCode, getComplianceStatusBadge, formatCentreTime } from '../utils/centreUtils.js';
 import { 
   shortenHash, 
   getIntegrityStatus, 
@@ -38,6 +50,7 @@ function formatBytes(bytes) {
 export default function IntegrityVerificationView({
   documents = [],
   cases = [],
+  centres = [],
   auditLogs = [],
   currentUser,
   currentRole,
@@ -45,8 +58,48 @@ export default function IntegrityVerificationView({
   onSimulateTamper,
   onRestoreDocument,
   onSelectCase,
+  onSelectCentre,
   onViewDocument
 }) {
+  const [activeTab, setActiveTab] = useState('edge'); // 'edge' | 'crypto'
+  const [inspectingCentreEdge, setInspectingCentreEdge] = useState(null);
+  const [pingingCentreId, setPingingCentreId] = useState(null);
+
+  const allCentres = useMemo(() => {
+    if (centres && centres.length > 0) return centres;
+    return loadLocal('compliance_centres', INITIAL_CENTRES);
+  }, [centres]);
+
+  const edgeMetrics = useMemo(() => {
+    const totalDevices = allCentres.length;
+    let totalCameras = 0;
+    let onlineCameras = 0;
+    let totalFps = 0;
+    let totalLatency = 0;
+    let onlineEdgeCount = 0;
+
+    allCentres.forEach(c => {
+      const h = c.edgeHealth || {};
+      totalCameras += h.cameraCount || 0;
+      onlineCameras += h.camerasOnline || 0;
+      totalFps += h.fps || 0;
+      totalLatency += h.latencyMs || 0;
+      if (h.edgeStatus === 'ONLINE') onlineEdgeCount++;
+    });
+
+    const avgFps = totalDevices > 0 ? (totalFps / totalDevices).toFixed(1) : '0';
+    const avgLatency = totalDevices > 0 ? Math.round(totalLatency / totalDevices) : 0;
+
+    return { totalDevices, onlineEdgeCount, totalCameras, onlineCameras, avgFps, avgLatency };
+  }, [allCentres]);
+
+  const handlePingDevice = (centreId) => {
+    setPingingCentreId(centreId);
+    setTimeout(() => {
+      setPingingCentreId(null);
+    }, 1000);
+  };
+
   const [searchTerm, setSearchTerm] = useState('');
   const [caseFilter, setCaseFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -159,37 +212,330 @@ export default function IntegrityVerificationView({
       <div className="bg-white border border-slate-200 rounded-xl px-6 py-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="cg-page-title text-slate-900 tracking-tight flex items-center gap-2">
-            <ShieldCheck className="w-6 h-6 text-emerald-600 stroke-[2]" />
-            <span>Integrity Verification</span>
+            {activeTab === 'edge' ? (
+              <Cpu className="w-6 h-6 text-blue-600 stroke-[2]" />
+            ) : (
+              <ShieldCheck className="w-6 h-6 text-emerald-600 stroke-[2]" />
+            )}
+            <span>{activeTab === 'edge' ? 'Edge Device & Camera Health' : 'Evidence Cryptographic Integrity'}</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Verify stored documents against their original cryptographic fingerprint.
+            {activeTab === 'edge'
+              ? 'Real-time telemetry, RTSP stream health, and inference latency across edge hardware.'
+              : 'Verify stored compliance evidence and CCTV frames against their immutable cryptographic fingerprint.'}
           </p>
         </div>
 
-        {/* Action: Verify All */}
+        {/* Tab Switcher & Actions */}
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleVerifyAll}
-            disabled={isVerifyingAll || documents.length === 0}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:cursor-not-allowed"
-            title="Sequentially verify cryptographic integrity of all documents"
-          >
-            {isVerifyingAll ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Verifying ({verifyAllProgress.current}/{verifyAllProgress.total})...</span>
-              </>
-            ) : (
-              <>
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Verify All</span>
-              </>
-            )}
-          </button>
+          <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+            <button
+              onClick={() => setActiveTab('edge')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                activeTab === 'edge'
+                  ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Edge & Cameras
+            </button>
+            <button
+              onClick={() => setActiveTab('crypto')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                activeTab === 'crypto'
+                  ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Evidence Seals ({documents.length})
+            </button>
+          </div>
+
+          {activeTab === 'crypto' && (
+            <button
+              type="button"
+              onClick={handleVerifyAll}
+              disabled={isVerifyingAll || documents.length === 0}
+              className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors cursor-pointer disabled:cursor-not-allowed"
+              title="Sequentially verify cryptographic integrity of all evidence records"
+            >
+              {isVerifyingAll ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Verifying ({verifyAllProgress.current}/{verifyAllProgress.total})...</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Verify All</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
+
+      {activeTab === 'edge' ? (
+        <div className="space-y-4">
+          {/* KPI Summary Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
+              <div className="text-[11px] font-mono uppercase tracking-wider text-slate-500 font-medium">Edge Devices</div>
+              <div className="text-2xl font-bold font-mono text-slate-900 mt-1">
+                {edgeMetrics.onlineEdgeCount} / {edgeMetrics.totalDevices}
+              </div>
+              <div className="text-[11px] text-emerald-600 font-medium mt-0.5">Online & Heartbeat Active</div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
+              <div className="text-[11px] font-mono uppercase tracking-wider text-slate-500 font-medium">CCTV Camera Feeds</div>
+              <div className="text-2xl font-bold font-mono text-slate-900 mt-1">
+                {edgeMetrics.onlineCameras} / {edgeMetrics.totalCameras}
+              </div>
+              <div className="text-[11px] text-blue-600 font-medium mt-0.5">Active RTSP Streams</div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
+              <div className="text-[11px] font-mono uppercase tracking-wider text-slate-500 font-medium">Inference Speed</div>
+              <div className="text-2xl font-bold font-mono text-slate-900 mt-1">
+                {edgeMetrics.avgFps} <span className="text-sm font-sans font-normal text-slate-500">FPS</span>
+              </div>
+              <div className="text-[11px] text-slate-400 mt-0.5">YOLOv8 Edge Real-Time</div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
+              <div className="text-[11px] font-mono uppercase tracking-wider text-slate-500 font-medium">Avg Gateway Latency</div>
+              <div className="text-2xl font-bold font-mono text-slate-900 mt-1">
+                {edgeMetrics.avgLatency} <span className="text-sm font-sans font-normal text-slate-500">ms</span>
+              </div>
+              <div className="text-[11px] text-slate-400 mt-0.5">Gateway Round-Trip</div>
+            </div>
+          </div>
+
+          {/* Edge Devices Table (Desktop) */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-mono text-[11px] uppercase tracking-wider font-semibold select-none">
+                    <th className="py-3 px-4">Training Centre</th>
+                    <th className="py-3 px-4">Edge Hardware & ID</th>
+                    <th className="py-3 px-3">Status</th>
+                    <th className="py-3 px-3">FPS / Latency</th>
+                    <th className="py-3 px-3">CPU / GPU / Temp</th>
+                    <th className="py-3 px-3">CCTV Feeds</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {allCentres.map((c) => {
+                    const h = c.edgeHealth || {};
+                    const isOnline = h.edgeStatus === 'ONLINE';
+                    const isPinging = pingingCentreId === c.id;
+
+                    return (
+                      <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-slate-900 max-w-xs truncate">{c.name}</div>
+                          <div className="text-[11px] text-blue-600 font-mono mt-0.5 flex items-center space-x-1.5">
+                            <span>{formatCentreCode(c.centreCode || c.id)}</span>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-slate-500">{c.location?.state || 'National'}</span>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <div className="font-mono font-medium text-slate-900">{h.edgeDeviceId || 'EDGE-JETSON-01'}</div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">{h.deviceModel || 'NVIDIA Jetson'}</div>
+                        </td>
+
+                        <td className="py-3 px-3">
+                          <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold border ${
+                            isOnline 
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                              : h.edgeStatus === 'DEGRADED'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-red-50 text-red-700 border-red-200'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                            <span>{h.edgeStatus || 'OFFLINE'}</span>
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-3 font-mono">
+                          <div className="text-slate-800 font-medium">{h.fps || 0} FPS</div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">{h.latencyMs || 0} ms latency</div>
+                        </td>
+
+                        <td className="py-3 px-3 font-mono text-[11px]">
+                          <div>CPU {h.cpuUsage || 0}% / GPU {h.gpuUsage || 0}%</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">{h.temperatureC ? `${h.temperatureC}°C` : 'N/A'}</div>
+                        </td>
+
+                        <td className="py-3 px-3">
+                          <span className="font-mono font-semibold text-slate-800">
+                            {h.camerasOnline || 0} / {h.cameraCount || 0}
+                          </span>
+                          <span className="text-[11px] text-slate-400 ml-1">online</span>
+                        </td>
+
+                        <td className="py-3 px-4 text-right space-x-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handlePingDevice(c.id)}
+                            disabled={isPinging}
+                            className="inline-flex items-center space-x-1 px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-md text-xs font-medium transition-colors"
+                          >
+                            <Activity className={`w-3 h-3 text-slate-500 ${isPinging ? 'animate-spin text-blue-600' : ''}`} />
+                            <span>{isPinging ? 'Pinging...' : 'Ping'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setInspectingCentreEdge(c)}
+                            className="inline-flex items-center space-x-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-md text-xs font-medium transition-colors"
+                          >
+                            <Camera className="w-3 h-3" />
+                            <span>Cameras</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile View: Stacked Cards */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {allCentres.map((c) => {
+                const h = c.edgeHealth || {};
+                const isOnline = h.edgeStatus === 'ONLINE';
+
+                return (
+                  <div key={c.id} className="p-4 space-y-2.5 hover:bg-slate-50/50">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-xs text-slate-900">{formatCentreCode(c.centreCode || c.id)}</span>
+                      <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold border ${
+                        isOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'
+                      }`}>
+                        <span>{h.edgeStatus || 'OFFLINE'}</span>
+                      </span>
+                    </div>
+
+                    <div className="text-xs font-semibold text-slate-900">{c.name}</div>
+
+                    <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100 font-mono text-[11px]">
+                      <div>
+                        <span className="text-slate-400 block text-[10px]">DEVICE</span>
+                        <span className="font-semibold text-slate-800">{h.edgeDeviceId}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px]">FPS / LATENCY</span>
+                        <span className="font-semibold text-slate-800">{h.fps} FPS / {h.latencyMs}ms</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px]">CAMERAS</span>
+                        <span className="font-semibold text-slate-800">{h.camerasOnline} / {h.cameraCount}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px]">TEMP</span>
+                        <span className="font-semibold text-slate-800">{h.temperatureC ? `${h.temperatureC}°C` : 'N/A'}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end space-x-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setInspectingCentreEdge(c)}
+                        className="w-full flex items-center justify-center space-x-1.5 py-2 bg-slate-900 text-white rounded-lg text-xs font-medium shadow-xs"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>Inspect Camera Feeds</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Edge Camera Inspector Slide-over */}
+          {inspectingCentreEdge && (
+            <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
+              <div
+                onClick={() => setInspectingCentreEdge(null)}
+                className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
+              />
+
+              <div className="relative w-full max-w-md bg-white border-l border-slate-200 shadow-xl flex flex-col h-full z-10 animate-in slide-in-from-right duration-200">
+                <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-blue-600/10 border border-blue-200 flex items-center justify-center text-blue-700">
+                      <Camera className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900">
+                        Camera Feeds Diagnostics
+                      </h3>
+                      <p className="text-[11px] text-slate-500 font-mono">
+                        {formatCentreCode(inspectingCentreEdge.centreCode || inspectingCentreEdge.id)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setInspectingCentreEdge(null)}
+                    className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
+                  <div className="space-y-3">
+                    {(inspectingCentreEdge.edgeHealth?.cameras || []).map((cam) => {
+                      const isCamOnline = cam.status === 'ONLINE';
+                      return (
+                        <div key={cam.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-bold text-slate-900">{cam.id}</span>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold border ${
+                              isCamOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'
+                            }`}>
+                              {cam.status}
+                            </span>
+                          </div>
+                          <div className="font-medium text-slate-800">{cam.name}</div>
+                          <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 pt-1 border-t border-slate-200/60">
+                            <span>Res: {cam.resolution}</span>
+                            <span>Stream: {cam.fps} FPS</span>
+                          </div>
+                          {cam.reason && (
+                            <div className="text-[11px] text-red-600 bg-red-50 p-2 rounded border border-red-100 mt-1">
+                              Alert: {cam.reason}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="p-4 border-t border-slate-200 bg-slate-50/70 flex justify-end">
+                  <button
+                    onClick={() => setInspectingCentreEdge(null)}
+                    className="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-semibold"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
 
       {/* 2. Filter Bar */}
       <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
@@ -849,6 +1195,8 @@ export default function IntegrityVerificationView({
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

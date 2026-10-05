@@ -171,7 +171,7 @@ export default function GlobalSearchView({
           Search
         </h1>
         <p className="text-xs text-slate-500 mt-0.5">
-          Find documents and evidence across authorized cases.
+          Search centres, batches, compliance alerts, and evidence frames across monitored facilities.
         </p>
       </div>
 
@@ -181,7 +181,7 @@ export default function GlobalSearchView({
         <input
           ref={searchInputRef}
           type="text"
-          placeholder="Search documents, cases, filenames, OCR text, or hash..."
+          placeholder="Search centres, batches, equipment, or evidence frames..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="w-full bg-white border border-slate-300 rounded-xl pl-10 pr-9 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-2xs transition-colors"

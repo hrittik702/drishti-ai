@@ -4,8 +4,11 @@ import TopHeader from './components/TopHeader';
 import Dashboard from './components/Dashboard';
 import CaseWorkspace from './components/CaseWorkspace';
 import CasesView from './components/CasesView';
+import TrainingCentreWorkspace from './components/TrainingCentreWorkspace';
+import TrainingCentresView from './components/TrainingCentresView';
 import DocumentLibrary from './components/DocumentLibrary';
 import IntegrityVerificationView from './components/IntegrityVerificationView';
+import OnboardCentreModal from './components/OnboardCentreModal';
 import CreateCaseModal from './components/CreateCaseModal';
 import UploadModal from './components/UploadModal';
 import AuditTrailView from './components/AuditTrailView';
@@ -14,12 +17,15 @@ import AccessDeniedModal from './components/AccessDeniedModal';
 import ShareDocumentModal from './components/ShareDocumentModal';
 import LoginView from './components/LoginView';
 import GlobalSearchView from './components/GlobalSearchView';
+import ComplianceEventsView from './components/ComplianceEventsView';
 import Toast from './components/Toast';
 
 import { ROLES } from './data/roles';
 import { DEMO_USERS } from './data/demoUsers';
 import { loadLocal, saveLocal } from './services/db';
 import { CaseRepository } from './services/caseRepository';
+import { CentreRepository } from './services/centreRepository';
+import { ComplianceEventRepository } from './services/complianceEventRepository';
 import { DocumentRepository } from './services/documentRepository';
 import { AuditRepository } from './services/auditRepository';
 import { SharingService } from './services/sharingService';
@@ -45,13 +51,16 @@ export default function App() {
     return user?.role || ROLES.INVESTIGATION_OFFICER;
   });
 
-  const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard' | 'cases' | 'documents' | 'integrity' | 'audit' | 'search' | 'access'
+  const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard' | 'centres' | 'events' | 'evidence' | 'integrity' | 'audit' | 'search' | 'access'
   
   // Real repositories state backed by Dual-Persistence (localStorage instant hydration + IndexedDB)
   const [cases, setCases] = useState(() => loadLocal('caseguard_cases', []));
+  const [centres, setCentres] = useState(() => loadLocal('compliance_centres', []));
+  const [complianceEvents, setComplianceEvents] = useState(() => loadLocal('compliance_events', []));
   const [documents, setDocuments] = useState(() => loadLocal('caseguard_documents', []));
   const [auditLogs, setAuditLogs] = useState(() => loadLocal('caseguard_audit_events', []));
   const [selectedCase, setSelectedCase] = useState(null);
+  const [selectedCentre, setSelectedCentre] = useState(null);
   const [loading, setLoading] = useState(false);
 
   // Background OCR job tracking & cancellation
@@ -95,16 +104,24 @@ export default function App() {
   const loadAllData = async () => {
     try {
       setLoading(true);
-      const [cList, dList, aList] = await Promise.all([
+      const [cList, dList, aList, centresList, eventsList] = await Promise.all([
         CaseRepository.getAllCases(),
         DocumentRepository.getAllDocuments(),
-        AuditRepository.getAllAuditEvents()
+        AuditRepository.getAllAuditEvents(),
+        CentreRepository.getAllCentres(),
+        ComplianceEventRepository.getAllEvents()
       ]);
       setCases(cList);
       setDocuments(dList);
       setAuditLogs(aList);
+      setCentres(centresList);
+      setComplianceEvents(eventsList);
 
-      // Keep selectedCase in sync if open
+      // Keep selectedCase / selectedCentre in sync if open
+      if (selectedCentre) {
+        const found = centresList.find(c => c.id === selectedCentre.id || c.centreCode === selectedCentre.centreCode);
+        setSelectedCentre(found || null);
+      }
       if (selectedCase) {
         const found = cList.find(c => c.id === selectedCase.id || c.caseNumber === selectedCase.caseNumber);
         setSelectedCase(found || null);
@@ -121,13 +138,17 @@ export default function App() {
     loadAllData();
   }, []);
 
-  // Sync selectedCase when cases array updates
+  // Sync selectedCase & selectedCentre when arrays update
   useEffect(() => {
+    if (selectedCentre) {
+      const updated = centres.find(c => c.id === selectedCentre.id || c.centreCode === selectedCentre.centreCode);
+      if (updated) setSelectedCentre(updated);
+    }
     if (selectedCase) {
       const updated = cases.find(c => c.id === selectedCase.id || c.caseNumber === selectedCase.caseNumber);
       if (updated) setSelectedCase(updated);
     }
-  }, [cases]);
+  }, [cases, centres]);
 
   // Derived real metrics
   const integrityAlertCount = documents.filter(d => d.isTampered).length;
@@ -212,39 +233,45 @@ export default function App() {
     loadAllData();
   };
 
-  // RBAC Gated Case Selection
-  const handleSelectCase = async (c) => {
+  // RBAC Gated Centre & Case Selection
+  const handleSelectCentre = async (c) => {
     if (!c) return;
+    const targetCode = c.centreCode || c.caseNumber || c.id;
     const allowed = SharingService.canUserAccessCase(currentUser || currentRole, c);
     if (!allowed) {
-      const denialDetails = `403 Forbidden: Officer "${currentUser?.name || currentRole?.name}" (${currentUser?.designation || currentRole?.designation}) is not assigned to Case ${c.caseNumber}. Under PoLP security policy, access is restricted strictly to assigned precinct officers and appointed prosecutors.`;
+      const denialDetails = `403 Forbidden: Officer "${currentUser?.name || currentRole?.name}" (${currentUser?.designation || currentRole?.designation}) is not assigned to Centre #${targetCode}. Under PoLP security policy, access is restricted strictly to assigned inspection officers.`;
 
       await AuditRepository.logAuditEvent({
         actor: currentUser || currentRole,
         role: currentUser?.designation || currentRole?.designation,
         action: 'UNAUTHORIZED_ACCESS_DENIED',
-        targetType: 'CASE',
-        targetId: c.caseNumber,
-        caseId: c.caseNumber,
+        targetType: 'CENTRE',
+        targetId: targetCode,
+        caseId: targetCode,
         result: 'DENIED',
         details: denialDetails
       });
 
       setAccessDeniedData({
-        docName: `Case Dossier #${c.caseNumber} (${c.title})`,
+        docName: `Centre Dossier #${targetCode} (${c.name || c.title})`,
         role: currentRole,
-        attemptedType: 'CASE',
-        resourceClassification: c.priority === 'High' || c.priority === 'Critical' ? 'Confidential Case File' : 'Restricted Case File',
+        attemptedType: 'CENTRE',
+        resourceClassification: 'Restricted Compliance Record',
         denialReason: denialDetails
       });
 
-      addToast('403 Access Denied', `You are not assigned to Case #${c.caseNumber}`, 'warning');
+      addToast('403 Access Denied', `You are not assigned to Centre #${targetCode}`, 'warning');
       loadAllData();
       return;
     }
 
+    setSelectedCentre(c);
     setSelectedCase(c);
-    setCurrentView('cases');
+    setCurrentView('centres');
+  };
+
+  const handleSelectCase = async (c) => {
+    return handleSelectCentre(c);
   };
 
   // RBAC Gated Document View
@@ -355,16 +382,19 @@ export default function App() {
     }
   };
 
-  // Case Actions
-  const handleOpenCreateCase = () => {
+  // Centre Onboarding Actions
+  const handleOpenRegisterCentre = () => {
     setCreateCaseModalOpen(true);
   };
+  const handleOpenCreateCase = handleOpenRegisterCentre;
 
-  const handleCaseCreated = (newCase) => {
+  const handleCentreCreated = (newItem) => {
     loadAllData();
-    setSelectedCase(newCase);
-    setCurrentView('cases');
+    setSelectedCentre(newItem);
+    setSelectedCase(newItem);
+    setCurrentView('centres');
   };
+  const handleCaseCreated = handleCentreCreated;
 
   // Upload Actions
   const handleOpenUpload = (caseNumber, targetDocId = null) => {
@@ -725,8 +755,8 @@ export default function App() {
           currentView={currentView}
           setCurrentView={(view) => {
             setCurrentView(view);
-            if (view === 'cases' && !selectedCase && cases.length > 0) {
-              // Keep on cases list
+            if ((view === 'cases' || view === 'centres') && !selectedCentre && !selectedCase) {
+              // Stay on list
             }
           }}
           currentUser={currentUser}
@@ -737,7 +767,7 @@ export default function App() {
           }}
           onSwitchUser={handleSwitchUser}
           integrityAlertCount={integrityAlertCount}
-          casesCount={cases.length}
+          casesCount={centres.length > 0 ? centres.length : cases.length}
           documentsCount={documents.length}
           mobileOpen={mobileOpen}
           setMobileOpen={setMobileOpen}
@@ -751,7 +781,7 @@ export default function App() {
         {!isDocumentWorkspaceOpen && (
           <TopHeader
             currentView={currentView}
-            selectedCase={selectedCase}
+            selectedCase={selectedCentre || selectedCase}
             onOpenMobileMenu={() => setMobileOpen(true)}
             onOpenSearch={() => setCurrentView('search')}
             integrityAlertCount={integrityAlertCount}
@@ -768,10 +798,14 @@ export default function App() {
           {currentView === 'dashboard' && (
             <Dashboard
               cases={cases}
+              centres={centres}
+              complianceEvents={complianceEvents}
               documents={documents}
               auditLogs={auditLogs}
-              onSelectCase={handleSelectCase}
+              onSelectCase={handleSelectCentre}
+              onSelectCentre={handleSelectCentre}
               onOpenCreateCase={handleOpenCreateCase}
+              onOpenRegisterCentre={handleOpenCreateCase}
               onOpenUpload={handleOpenUpload}
               onQuickVerify={handleVerifyDoc}
               integrityAlertCount={integrityAlertCount}
@@ -782,12 +816,16 @@ export default function App() {
             />
           )}
 
-          {/* VIEW 2: CASE WORKSPACES */}
-          {currentView === 'cases' && (
-            selectedCase ? (
+          {/* VIEW 2: TRAINING CENTRES & WORKSPACES */}
+          {(currentView === 'cases' || currentView === 'centres') && (
+            (selectedCentre || selectedCase) ? (
               <CaseWorkspace
-                caseItem={selectedCase}
-                onBack={() => setSelectedCase(null)}
+                caseItem={selectedCentre || selectedCase}
+                centreItem={selectedCentre || selectedCase}
+                onBack={() => {
+                  setSelectedCentre(null);
+                  setSelectedCase(null);
+                }}
                 onOpenUpload={(cNum) => handleOpenUpload(cNum)}
                 onViewDocument={handleViewDocument}
                 onDownloadDocument={handleDownloadDocument}
@@ -800,18 +838,37 @@ export default function App() {
             ) : (
               <CasesView
                 cases={cases}
+                centres={centres}
+                complianceEvents={complianceEvents}
                 documents={documents}
                 currentUser={currentUser}
                 currentRole={currentRole}
-                onSelectCase={handleSelectCase}
+                onSelectCase={handleSelectCentre}
+                onSelectCentre={handleSelectCentre}
                 onOpenCreateCase={handleOpenCreateCase}
+                onOpenRegisterCentre={handleOpenCreateCase}
                 loading={loading}
               />
             )
           )}
 
-          {/* VIEW 3: DOCUMENT VAULT (2-Pane Library) */}
-          {currentView === 'documents' && (
+          {/* VIEW 3: COMPLIANCE EVENTS STREAM */}
+          {currentView === 'events' && (
+            <ComplianceEventsView
+              complianceEvents={complianceEvents}
+              centres={centres}
+              currentUser={currentUser}
+              currentRole={currentRole}
+              onSelectCentre={handleSelectCentre}
+              onViewEvidence={(evidenceId) => {
+                setCurrentView('documents');
+              }}
+              addToast={addToast}
+            />
+          )}
+
+          {/* VIEW 4: AI EVIDENCE & DOCUMENT VAULT */}
+          {(currentView === 'documents' || currentView === 'evidence') && (
             <DocumentLibrary
               documents={documents}
               cases={cases}
@@ -831,11 +888,12 @@ export default function App() {
             />
           )}
 
-          {/* VIEW 4: INTEGRITY & VERIFICATION */}
-          {currentView === 'integrity' && (
+          {/* VIEW 5: EDGE & CAMERA HEALTH / INTEGRITY */}
+          {(currentView === 'integrity' || currentView === 'health') && (
             <IntegrityVerificationView
               documents={accessibleDocuments}
               cases={cases}
+              centres={centres}
               auditLogs={auditLogs}
               currentUser={currentUser}
               currentRole={currentRole}
@@ -844,16 +902,17 @@ export default function App() {
               onRestoreDocument={handleRestoreDoc}
               onSelectCase={(caseId) => {
                 const targetId = String(caseId).replace(/^#/, '');
-                const matched = cases.find(c => String(c.caseNumber || '').replace(/^#/, '') === targetId || c.id === targetId);
+                const matched = centres.find(c => (c.centreCode || '').replace(/^#/, '') === targetId || c.id === targetId) ||
+                  cases.find(c => String(c.caseNumber || '').replace(/^#/, '') === targetId || c.id === targetId);
                 if (matched) {
-                  setSelectedCase(matched);
-                  setCurrentView('cases');
+                  handleSelectCentre(matched);
                 } else {
-                  setCurrentView('cases');
+                  setCurrentView('centres');
                 }
               }}
+              onSelectCentre={handleSelectCentre}
               onViewDocument={(doc) => {
-                setSelectedDoc(doc);
+                setSelectedDocIdForLibrary(doc.id);
                 setCurrentView('documents');
               }}
             />
@@ -904,10 +963,11 @@ export default function App() {
 
       </div>
 
-      {/* MODAL 1: Create Case Dossier */}
+      {/* MODAL 1: Onboard Training Centre */}
       {createCaseModalOpen && (
-        <CreateCaseModal
+        <OnboardCentreModal
           onClose={() => setCreateCaseModalOpen(false)}
+          onCentreCreated={handleCentreCreated}
           onCaseCreated={handleCaseCreated}
           currentRole={currentRole}
           addToast={addToast}

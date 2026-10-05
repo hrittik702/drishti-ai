@@ -40,8 +40,8 @@ export function CaseGuardMark({ className = 'w-5 h-5', ...props }) {
 export default function CaseGuardLogo({ 
   size = 'md', 
   showWordmark = true, 
-  subtitle = 'Secure Legal & Case Vault',
-  badgeText = 'DMS',
+  subtitle = 'Edge-AI Compliance Monitoring',
+  badgeText = 'EDGE-AI',
   className = '' 
 }) {
   const sizeConfig = {
@@ -75,7 +75,7 @@ export default function CaseGuardLogo({
       {/* Icon Mark Container */}
       <div 
         className={`${config.box} bg-slate-900 flex items-center justify-center text-blue-400 shadow-2xs shrink-0 select-none border border-slate-800`}
-        title="CASEGUARD Digital Evidence Vault"
+        title="COMPLIANCEGUARD Edge-AI Monitoring"
       >
         <CaseGuardMark className={config.mark} />
       </div>
@@ -85,7 +85,7 @@ export default function CaseGuardLogo({
         <div className="min-w-0">
           <div className="flex items-center space-x-1.5 leading-none">
             <span className={`font-semibold tracking-tight text-slate-900 font-mono ${config.title}`}>
-              CASEGUARD
+              COMPLIANCEGUARD
             </span>
             {badgeText && (
               <span className={`font-mono font-medium bg-blue-50 text-blue-700 rounded border border-blue-200 tracking-wider shrink-0 ${config.badge}`}>

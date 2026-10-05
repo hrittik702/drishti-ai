@@ -63,7 +63,7 @@ export default function LoginView({ onLoginSuccess }) {
 
           <div className="flex items-center space-x-2 text-xs text-slate-500 font-medium">
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span className="font-mono text-slate-700">Digital Custody Active</span>
+            <span className="font-mono text-slate-700">Edge-AI Monitoring Online</span>
           </div>
         </div>
       </header>
@@ -82,7 +82,7 @@ export default function LoginView({ onLoginSuccess }) {
                     Sign In
                   </h1>
                   <p className="text-xs text-slate-500 mt-1.5 leading-relaxed font-normal">
-                    Secure access to legal and investigation records. Authentication determines the user's role and access clearance.
+                    Secure access to training-centre monitoring, compliance events and AI verification. Authentication determines the user's role and access clearance.
                   </p>
                 </div>
 
@@ -147,11 +147,11 @@ export default function LoginView({ onLoginSuccess }) {
               </div>
 
               <div className="mt-8 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-normal">
-                <span>Secure access</span>
+                <span>Edge-AI Telemetry</span>
                 <span>•</span>
-                <span>Encrypted document management</span>
+                <span>Real-time Compliance Verification</span>
                 <span>•</span>
-                <span>Role-based authorization</span>
+                <span>Role-based Access</span>
               </div>
             </div>
 
@@ -190,7 +190,7 @@ export default function LoginView({ onLoginSuccess }) {
                                 {u.name}
                               </div>
                               <div className="text-[10px] text-slate-500 truncate font-normal">
-                                {u.role.name}
+                                {u.designation || u.role.name}
                               </div>
                             </div>
                           </div>
@@ -214,7 +214,7 @@ export default function LoginView({ onLoginSuccess }) {
 
               <div className="mt-6 pt-3 border-t border-slate-200/80 text-[11px] text-slate-500">
                 <span className="font-medium text-slate-700">Access Policy: </span>
-                Clearance determines accessible case dossiers and evidentiary actions.
+                Clearance determines assigned training centres and compliance verification actions.
               </div>
             </div>
 
@@ -225,7 +225,7 @@ export default function LoginView({ onLoginSuccess }) {
 
       {/* Subtle Institutional Footer */}
       <footer className="border-t border-slate-200 bg-white py-3 px-6 text-center text-xs text-slate-400 font-normal">
-        <p>CASEGUARD — Secure Legal & Case Vault</p>
+        <p>COMPLIANCEGUARD — Edge-AI Training Centre Compliance Monitoring System</p>
       </footer>
     </div>
   );

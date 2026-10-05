@@ -15,12 +15,16 @@ export default function TopHeader({
   const getViewTitle = () => {
     switch (currentView) {
       case 'dashboard': return 'Overview';
-      case 'cases': return 'Cases';
-      case 'documents': return 'Documents';
-      case 'integrity': return 'Integrity';
-      case 'audit': return 'Audit Trail';
+      case 'centres':
+      case 'cases': return 'Training Centres';
+      case 'events': return 'Compliance Events';
+      case 'evidence':
+      case 'documents': return 'AI Evidence';
+      case 'integrity':
+      case 'health': return 'Edge & Camera Health';
+      case 'audit': return 'Verification Log';
       case 'search': return 'Search';
-      case 'access': return 'Access Control';
+      case 'access': return 'Users & Roles';
       default: return currentView;
     }
   };
@@ -43,18 +47,18 @@ export default function TopHeader({
 
         {/* Breadcrumb Hierarchy */}
         <nav className="flex items-center space-x-1.5 text-xs text-slate-500 font-medium overflow-hidden">
-          <span className="text-slate-900 font-semibold font-mono tracking-tight shrink-0">CASEGUARD</span>
+          <span className="text-slate-900 font-semibold font-mono tracking-tight shrink-0">COMPLIANCEGUARD</span>
           <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
           
-          <span className={`text-slate-700 truncate ${currentView === 'cases' && selectedCase ? 'font-mono' : ''}`}>
-            {currentView === 'cases' && selectedCase ? selectedCase.caseNumber : getViewTitle()}
+          <span className="text-slate-700 truncate">
+            {getViewTitle()}
           </span>
 
-          {currentView === 'cases' && selectedCase && (
+          {(currentView === 'cases' || currentView === 'centres') && selectedCase && (
             <>
               <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0 hidden sm:inline" />
-              <span className="text-blue-600 font-medium truncate max-w-[120px] sm:max-w-xs hidden sm:inline">
-                {selectedCase.title}
+              <span className="text-blue-600 font-medium truncate max-w-[140px] sm:max-w-xs hidden sm:inline">
+                {selectedCase.name || selectedCase.title}
               </span>
             </>
           )}
@@ -69,10 +73,10 @@ export default function TopHeader({
           <button
             onClick={onOpenSearch}
             className="hidden md:flex items-center space-x-2 bg-slate-100 hover:bg-slate-200/80 text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 transition-colors"
-            aria-label="Search cases and documents"
+            aria-label="Search training centres, batches, and compliance events"
           >
             <Search className="w-3.5 h-3.5 text-slate-400" />
-            <span>Search cases or documents...</span>
+            <span>Search centres, batches, or compliance events...</span>
             <kbd className="bg-white border border-slate-300 text-[10px] px-1.5 py-0.5 rounded text-slate-500 font-mono font-medium">⌘K</kbd>
           </button>
         )}

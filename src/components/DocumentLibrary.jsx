@@ -296,14 +296,14 @@ export default function DocumentLibrary({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            Document Vault
+            AI Evidence Vault
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Browse, search and manage case documents.
+            Cryptographically sealed CCTV frames, event captures, and verification records.
           </p>
         </div>
 
-        {/* Header Controls: [Search Icon] [Filter Button] [+ Upload Document] */}
+        {/* Header Controls: [Search Icon] [Filter Button] [+ Upload Evidence] */}
         <div className="flex items-center space-x-2 relative">
           
           {/* Search Trigger Icon Button */}
@@ -350,13 +350,13 @@ export default function DocumentLibrary({
             />
           </div>
 
-          {/* Upload Document Primary Action */}
+          {/* Upload Evidence Primary Action */}
           <button
             onClick={() => onOpenUpload && onOpenUpload()}
             className="inline-flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors"
           >
             <Plus className="w-4 h-4" />
-            <span>Upload Document</span>
+            <span>Upload Evidence</span>
           </button>
 
         </div>
@@ -380,7 +380,7 @@ export default function DocumentLibrary({
 
           {filters.caseId !== 'ALL' && (
             <span className="inline-flex items-center space-x-1 bg-slate-100 text-slate-800 border border-slate-200 px-2 py-0.5 rounded-md text-[11px]">
-              <span>Case: #{filters.caseId}</span>
+              <span>Centre: #{filters.caseId}</span>
               <button onClick={() => handleFilterChange('caseId', 'ALL')} className="hover:text-slate-900">
                 <X className="w-3 h-3" />
               </button>
@@ -482,17 +482,17 @@ export default function DocumentLibrary({
           <div className="space-y-1">
             <h3 className="text-lg font-semibold text-slate-800">
               {accessibleDocuments.length === 0 
-                ? 'No Documents in Vault'
+                ? 'No Evidence in Vault'
                 : searchQuery.trim() 
-                  ? 'No documents match your search'
-                  : 'No documents match the selected filters'}
+                  ? 'No evidence matches your search'
+                  : 'No evidence matches the selected filters'}
             </h3>
             <p className="text-sm text-slate-500 max-w-sm mx-auto font-normal">
               {accessibleDocuments.length === 0
-                ? 'Upload a document to begin building the case evidence repository.'
+                ? 'Ingest CCTV frame captures or verification telemetry to build the compliance evidence repository.'
                 : searchQuery.trim()
-                  ? `No accessible dockets matched "${searchQuery}". Try a broader term or reset filters.`
-                  : 'Try adjusting or clearing your active filters to view all case files.'}
+                  ? `No accessible evidence matched "${searchQuery}". Try a broader term or reset filters.`
+                  : 'Try adjusting or clearing your active filters to view all compliance evidence records.'}
             </p>
           </div>
 
@@ -500,10 +500,10 @@ export default function DocumentLibrary({
             {accessibleDocuments.length === 0 ? (
               <button
                 onClick={() => onOpenUpload && onOpenUpload()}
-                className="inline-flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg text-xs font-semibold shadow-xs"
+                className="inline-flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                <span>Upload Document</span>
+                <span>Upload Evidence</span>
               </button>
             ) : (
               <button

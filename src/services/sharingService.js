@@ -93,22 +93,31 @@ export const SharingService = {
   canUserAccessCase(user, caseItemOrNumber) {
     if (!user) return false;
     // System Administrator has universal access
-    if (user.role?.id === 'administrator' || user.assignedCases?.includes('*')) {
+    if (user.role?.id === 'administrator' || user.assignedCases?.includes('*') || user.assignedCentres?.includes('*')) {
       return true;
     }
 
-    const caseNumber = typeof caseItemOrNumber === 'string'
+    const targetId = typeof caseItemOrNumber === 'string'
       ? caseItemOrNumber
-      : (caseItemOrNumber?.caseNumber || caseItemOrNumber?.id);
+      : (caseItemOrNumber?.caseNumber || caseItemOrNumber?.centreCode || caseItemOrNumber?.id);
 
-    if (!caseNumber) return false;
+    if (!targetId) return false;
 
     // Check if user has this case in their assigned cases list
-    if (Array.isArray(user.assignedCases) && user.assignedCases.includes(caseNumber)) {
+    if (Array.isArray(user.assignedCases) && user.assignedCases.includes(targetId)) {
+      return true;
+    }
+
+    // Check if user has this centre in their assigned centres list
+    if (Array.isArray(user.assignedCentres) && user.assignedCentres.includes(targetId)) {
       return true;
     }
 
     return false;
+  },
+
+  canUserAccessCentre(user, centreItemOrCode) {
+    return this.canUserAccessCase(user, centreItemOrCode);
   },
 
   checkDocumentAccess(user, document, caseItem = null) {

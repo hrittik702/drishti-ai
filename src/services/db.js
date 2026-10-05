@@ -1,6 +1,6 @@
 // IndexedDB local storage engine for CASEGUARD with dual-persistence sync
 const DB_NAME = 'caseguard_db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbInstance = null;
 export const blobMemoryCache = new Map();
@@ -89,6 +89,29 @@ export function openDatabase() {
         auditStore.createIndex('timestamp', 'timestamp', { unique: false });
         auditStore.createIndex('caseId', 'caseId', { unique: false });
         auditStore.createIndex('targetId', 'targetId', { unique: false });
+      }
+
+      // 5. Training Centres store
+      if (!db.objectStoreNames.contains('centres')) {
+        const centreStore = db.createObjectStore('centres', { keyPath: 'id' });
+        centreStore.createIndex('centreCode', 'centreCode', { unique: true });
+        centreStore.createIndex('complianceStatus', 'complianceStatus', { unique: false });
+        centreStore.createIndex('createdAt', 'createdAt', { unique: false });
+      }
+
+      // 6. Compliance Events store
+      if (!db.objectStoreNames.contains('compliance_events')) {
+        const eventStore = db.createObjectStore('compliance_events', { keyPath: 'id' });
+        eventStore.createIndex('centreId', 'centreId', { unique: false });
+        eventStore.createIndex('timestamp', 'timestamp', { unique: false });
+        eventStore.createIndex('severity', 'severity', { unique: false });
+      }
+
+      // 7. Evidence store
+      if (!db.objectStoreNames.contains('evidence')) {
+        const evidenceStore = db.createObjectStore('evidence', { keyPath: 'id' });
+        evidenceStore.createIndex('centreId', 'centreId', { unique: false });
+        evidenceStore.createIndex('eventId', 'eventId', { unique: false });
       }
     };
 

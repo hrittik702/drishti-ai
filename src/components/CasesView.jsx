@@ -1,54 +1,64 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
-  FolderGit2,
-  FolderPlus,
+  Building2,
+  Plus,
   Search,
   X,
   SlidersHorizontal,
   ChevronRight,
   ChevronDown,
-  Lock,
-  FileText,
+  Camera,
   Calendar,
-  Building,
-  Scale,
   Eye,
   Copy,
   Check,
   RotateCcw,
   ShieldCheck,
-  UserCheck
+  AlertTriangle,
+  UserCheck,
+  Cpu,
+  Activity,
+  MapPin,
+  Clock
 } from 'lucide-react';
+import {
+  formatCentreCode,
+  getComplianceStatusBadge,
+  getSeverityBadge,
+  formatCentreDate,
+  filterAndSortCentres
+} from '../utils/centreUtils.js';
 import {
   formatCaseId,
   getCasePriority,
   getCaseStatus,
-  formatCaseDate,
-  getCaseDocumentCount,
-  filterAndSortCases
+  formatCaseDate as formatCaseDateOld
 } from '../utils/caseUtils.js';
 import { SharingService } from '../services/sharingService.js';
 
 export default function CasesView({
   cases = [],
+  centres = [],
   documents = [],
+  complianceEvents = [],
   currentUser = null,
   currentRole = null,
   onSelectCase,
+  onSelectCentre,
   onOpenCreateCase,
+  onOpenRegisterCentre,
   loading = false
 }) {
   // Search & Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [priorityFilter, setPriorityFilter] = useState('ALL');
-  const [typeFilter, setTypeFilter] = useState('ALL');
-  const [accessFilter, setAccessFilter] = useState('ALL');
+  const [schemeFilter, setSchemeFilter] = useState('ALL');
+  const [issueTypeFilter, setIssueTypeFilter] = useState('ALL');
   const [sortOption, setSortOption] = useState('updated');
 
   // UI Control States
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
-  const [inspectingCase, setInspectingCase] = useState(null);
+  const [inspectingCentre, setInspectingCentre] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
 
   const filterMenuRef = useRef(null);
@@ -68,67 +78,110 @@ export default function CasesView({
     };
   }, [filterMenuOpen]);
 
-  // Dynamic distinct case types for filter
-  const caseTypes = useMemo(() => {
-    const types = new Set();
-    cases.forEach(c => {
-      if (c && c.type) types.add(c.type);
-    });
-    return Array.from(types).sort();
-  }, [cases]);
+  // Unify centres list
+  const allCentres = useMemo(() => {
+    if (centres && centres.length > 0) return centres;
+    if (cases && cases.length > 0) {
+      return cases.map(c => ({
+        id: c.id,
+        centreCode: c.centreCode || c.caseNumber || c.id,
+        name: c.name || c.title,
+        scheme: c.scheme || c.type || 'PMKVY 4.0',
+        sector: c.sector || 'Skill Development',
+        location: c.location || { state: 'Delhi', district: 'South Delhi', address: c.address || 'Training Campus' },
+        assignedOfficer: c.assignedOfficer || (Array.isArray(c.assignedOfficers) ? c.assignedOfficers[0] : 'Inspector Vikram Rathore'),
+        complianceStatus: c.complianceStatus || (c.priority === 'Critical' ? 'CRITICAL' : c.priority === 'High' ? 'ATTENTION' : 'COMPLIANT'),
+        priority: c.priority || 'Medium',
+        activeBatch: c.activeBatch || {
+          batchId: `BATCH-${c.caseNumber || '01'}`,
+          courseName: c.type || 'Technical Training Course',
+          enrolledCount: 25,
+          startTime: '09:00',
+          endTime: '17:00'
+        },
+        currentSession: c.currentSession || {
+          sessionId: 'SES-01',
+          topic: c.summary ? c.summary.slice(0, 60) + '...' : 'Interactive Lab Practical',
+          trainerName: 'Master Trainer',
+          status: 'In Progress'
+        },
+        attendance: c.attendance || { declaredExpected: 25, detectedByAI: 22, difference: -3, discrepancyRate: 12.0, status: 'MISMATCH' },
+        infrastructure: c.infrastructure || { totalRequired: 5, totalDetected: 5, status: 'ADEQUATE', items: [] },
+        edgeHealth: c.edgeHealth || { cameraCount: 3, camerasOnline: 3, camerasOffline: 0, edgeStatus: 'ONLINE', fps: 20 },
+        recentAlertsCount: c.isTampered ? 1 : 0,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt || c.lastActivity
+      }));
+    }
+    return [];
+  }, [centres, cases]);
 
-  // Filtered & Sorted Cases
-  const filteredCases = useMemo(() => {
-    return filterAndSortCases(
-      cases,
-      documents,
+  // Dynamic distinct schemes for filter
+  const distinctSchemes = useMemo(() => {
+    const set = new Set();
+    allCentres.forEach(c => {
+      if (c && c.scheme) set.add(c.scheme);
+    });
+    return Array.from(set).sort();
+  }, [allCentres]);
+
+  // Filtered & Sorted Centres
+  const filteredCentres = useMemo(() => {
+    return filterAndSortCentres(
+      allCentres,
       {
         search: searchTerm,
         status: statusFilter,
-        priority: priorityFilter,
-        type: typeFilter,
-        access: accessFilter
+        scheme: schemeFilter,
+        issueType: issueTypeFilter
       },
-      sortOption,
-      currentUser || currentRole
+      sortOption
     );
-  }, [cases, documents, searchTerm, statusFilter, priorityFilter, typeFilter, accessFilter, sortOption, currentUser, currentRole]);
+  }, [allCentres, searchTerm, statusFilter, schemeFilter, issueTypeFilter, sortOption]);
 
   // Active filter count
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (statusFilter !== 'ALL') count++;
-    if (priorityFilter !== 'ALL') count++;
-    if (typeFilter !== 'ALL') count++;
-    if (accessFilter !== 'ALL') count++;
+    if (schemeFilter !== 'ALL') count++;
+    if (issueTypeFilter !== 'ALL') count++;
     return count;
-  }, [statusFilter, priorityFilter, typeFilter, accessFilter]);
+  }, [statusFilter, schemeFilter, issueTypeFilter]);
 
   const resetFilters = () => {
     setSearchTerm('');
     setStatusFilter('ALL');
-    setPriorityFilter('ALL');
-    setTypeFilter('ALL');
-    setAccessFilter('ALL');
+    setSchemeFilter('ALL');
+    setIssueTypeFilter('ALL');
   };
 
-  const handleCopyId = (e, caseNumber) => {
+  const handleCopyId = (e, code) => {
     e.stopPropagation();
-    const formatted = formatCaseId(caseNumber);
+    const formatted = formatCentreCode(code);
     navigator.clipboard?.writeText(formatted);
-    setCopiedId(caseNumber);
+    setCopiedId(code);
     setTimeout(() => setCopiedId(null), 1800);
   };
 
   const handleRowClick = (c) => {
-    if (onSelectCase) {
+    if (onSelectCentre) {
+      onSelectCentre(c);
+    } else if (onSelectCase) {
       onSelectCase(c);
     }
   };
 
   const handleInspect = (e, c) => {
     e.stopPropagation();
-    setInspectingCase(c);
+    setInspectingCentre(c);
+  };
+
+  const handleOpenRegister = () => {
+    if (onOpenRegisterCentre) {
+      onOpenRegisterCentre();
+    } else if (onOpenCreateCase) {
+      onOpenCreateCase();
+    }
   };
 
   return (
@@ -137,20 +190,20 @@ export default function CasesView({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 flex items-center gap-2">
-            <FolderGit2 className="w-5 h-5 text-blue-600" />
-            Cases
+            <Building2 className="w-5 h-5 text-blue-600" />
+            Training Centres
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Manage investigation and legal case dossiers.
+            Monitor training centre compliance, attendance congruence, and facility equipment via Edge AI.
           </p>
         </div>
 
         <button
-          onClick={onOpenCreateCase}
+          onClick={handleOpenRegister}
           className="inline-flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg text-xs font-semibold shadow-xs transition-colors self-start sm:self-auto focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
         >
-          <FolderPlus className="w-4 h-4" />
-          <span>Create Case</span>
+          <Plus className="w-4 h-4" />
+          <span>Onboard Centre</span>
         </button>
       </div>
 
@@ -162,7 +215,7 @@ export default function CasesView({
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              placeholder="Search by Case ID, title, statute, station, or officer..."
+              placeholder="Search by centre code, name, scheme, district, course, or inspector..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-8 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
@@ -200,11 +253,11 @@ export default function CasesView({
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform ${filterMenuOpen ? 'rotate-180' : ''}`} />
               </button>
 
-              {/* Filter Popover Menu */}
+              {/* Filter Popover Menu (Class required for responsive test: w-[calc(100vw-32px)] sm:w-72 max-w-sm) */}
               {filterMenuOpen && (
                 <div className="absolute right-0 mt-1.5 w-[calc(100vw-32px)] sm:w-72 max-w-sm bg-white border border-slate-200 rounded-xl shadow-lg z-30 p-4 space-y-3.5 text-xs">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <span className="font-semibold text-slate-900">Filter Cases</span>
+                    <span className="font-semibold text-slate-900">Filter Centres</span>
                     {activeFiltersCount > 0 && (
                       <button
                         onClick={resetFilters}
@@ -216,28 +269,10 @@ export default function CasesView({
                     )}
                   </div>
 
-                  {/* Priority Filter */}
+                  {/* Compliance Status Filter */}
                   <div>
                     <label className="text-[11px] font-medium text-slate-600 block mb-1">
-                      Priority Level
-                    </label>
-                    <select
-                      value={priorityFilter}
-                      onChange={(e) => setPriorityFilter(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-md py-1.5 px-2 text-xs text-slate-800 focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="ALL">All Priorities</option>
-                      <option value="Critical">Critical</option>
-                      <option value="High">High</option>
-                      <option value="Medium">Medium</option>
-                      <option value="Low">Low</option>
-                    </select>
-                  </div>
-
-                  {/* Status Filter */}
-                  <div>
-                    <label className="text-[11px] font-medium text-slate-600 block mb-1">
-                      Lifecycle Status
+                      Compliance Status
                     </label>
                     <select
                       value={statusFilter}
@@ -245,47 +280,44 @@ export default function CasesView({
                       className="w-full bg-slate-50 border border-slate-200 rounded-md py-1.5 px-2 text-xs text-slate-800 focus:outline-none focus:border-blue-500"
                     >
                       <option value="ALL">All Statuses</option>
-                      <option value="Active Investigation">Active Investigation</option>
-                      <option value="Under Investigation">Under Investigation</option>
-                      <option value="Charge Sheet Filed">Charge Sheet Filed</option>
-                      <option value="In Trial">In Trial</option>
-                      <option value="Pending Review">Pending Review</option>
-                      <option value="Closed">Closed</option>
+                      <option value="COMPLIANT">Compliant</option>
+                      <option value="ATTENTION">Attention Required</option>
+                      <option value="CRITICAL">Critical Discrepancy</option>
+                      <option value="OFFLINE">Edge Offline</option>
                     </select>
                   </div>
 
-                  {/* Case Type Filter */}
-                  {caseTypes.length > 0 && (
-                    <div>
-                      <label className="text-[11px] font-medium text-slate-600 block mb-1">
-                        Case Classification Type
-                      </label>
-                      <select
-                        value={typeFilter}
-                        onChange={(e) => setTypeFilter(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-md py-1.5 px-2 text-xs text-slate-800 focus:outline-none focus:border-blue-500"
-                      >
-                        <option value="ALL">All Case Types</option>
-                        {caseTypes.map(t => (
-                          <option key={t} value={t}>{t}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* RBAC Access Filter */}
+                  {/* Scheme Filter */}
                   <div>
                     <label className="text-[11px] font-medium text-slate-600 block mb-1">
-                      Clearance & Assignment Access
+                      Training Scheme
                     </label>
                     <select
-                      value={accessFilter}
-                      onChange={(e) => setAccessFilter(e.target.value)}
+                      value={schemeFilter}
+                      onChange={(e) => setSchemeFilter(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-md py-1.5 px-2 text-xs text-slate-800 focus:outline-none focus:border-blue-500"
                     >
-                      <option value="ALL">All Dossiers</option>
-                      <option value="ACCESSIBLE">Accessible to My Role</option>
-                      <option value="RESTRICTED">Restricted (Requires Assignment)</option>
+                      <option value="ALL">All Schemes</option>
+                      {distinctSchemes.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Issue Type Filter */}
+                  <div>
+                    <label className="text-[11px] font-medium text-slate-600 block mb-1">
+                      Discrepancy Category
+                    </label>
+                    <select
+                      value={issueTypeFilter}
+                      onChange={(e) => setIssueTypeFilter(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-md py-1.5 px-2 text-xs text-slate-800 focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="ALL">All Categories</option>
+                      <option value="ATTENDANCE">Attendance Deficit (&gt;10%)</option>
+                      <option value="INFRASTRUCTURE">Infrastructure Deficient</option>
+                      <option value="CAMERA_OFFLINE">Camera / Edge Offline</option>
                     </select>
                   </div>
                 </div>
@@ -295,191 +327,85 @@ export default function CasesView({
             {/* Sort Dropdown */}
             <div className="relative">
               <select
-                aria-label="Sort cases"
                 value={sortOption}
                 onChange={(e) => setSortOption(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-xs text-slate-700 font-medium focus:outline-none focus:border-blue-500 cursor-pointer appearance-none"
+                className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg py-2 pl-2.5 pr-7 focus:outline-none focus:border-blue-500 cursor-pointer font-medium appearance-none"
               >
-                <option value="updated">Recently Updated</option>
-                <option value="created">Recently Created</option>
-                <option value="id">Case ID</option>
-                <option value="name">Name (A-Z)</option>
-                <option value="priority">Priority (High-Low)</option>
-                <option value="records">Most Records</option>
+                <option value="updated">Recently Verified</option>
+                <option value="status">Compliance Severity</option>
+                <option value="discrepancy">Discrepancy Rate</option>
+                <option value="name">Centre Name</option>
+                <option value="code">Centre Code</option>
               </select>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
-
-            {/* Result count */}
-            <span className="text-[11px] text-slate-500 font-mono hidden sm:inline pl-1">
-              {filteredCases.length} {filteredCases.length === 1 ? 'case' : 'cases'}
-            </span>
           </div>
         </div>
-
-        {/* Active Filter Chips */}
-        {(searchTerm || activeFiltersCount > 0) && (
-          <div className="flex flex-wrap items-center gap-1.5 pt-2.5 mt-2.5 border-t border-slate-100 text-xs">
-            <span className="text-[11px] text-slate-500">Active filters:</span>
-            {searchTerm && (
-              <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px]">
-                Search: "{searchTerm}"
-                <button onClick={() => setSearchTerm('')} className="hover:text-slate-900">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-            {priorityFilter !== 'ALL' && (
-              <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px]">
-                Priority: {priorityFilter}
-                <button onClick={() => setPriorityFilter('ALL')} className="hover:text-slate-900">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-            {statusFilter !== 'ALL' && (
-              <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px]">
-                Status: {statusFilter}
-                <button onClick={() => setStatusFilter('ALL')} className="hover:text-slate-900">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-            {typeFilter !== 'ALL' && (
-              <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px]">
-                Type: {typeFilter}
-                <button onClick={() => setTypeFilter('ALL')} className="hover:text-slate-900">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-            {accessFilter !== 'ALL' && (
-              <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px]">
-                Access: {accessFilter === 'ACCESSIBLE' ? 'Accessible' : 'Restricted'}
-                <button onClick={() => setAccessFilter('ALL')} className="hover:text-slate-900">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-            <button
-              onClick={resetFilters}
-              className="text-[11px] text-blue-600 hover:text-blue-800 font-medium ml-1"
-            >
-              Clear all
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* 3. CASE PRESENTATION: SKELETON, EMPTY, OR DENSE TABLE */}
-      {loading ? (
-        /* LOADING SKELETON */
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-          <div className="p-4 space-y-3">
-            {[1, 2, 3, 4].map(idx => (
-              <div key={idx} className="animate-pulse flex items-center justify-between gap-4 py-3 border-b border-slate-100 last:border-0">
-                <div className="flex items-center space-x-3 w-1/4">
-                  <div className="h-6 w-24 bg-slate-200 rounded"></div>
-                </div>
-                <div className="flex-1 space-y-1.5">
-                  <div className="h-4 w-3/4 bg-slate-200 rounded"></div>
-                  <div className="h-3 w-1/2 bg-slate-100 rounded"></div>
-                </div>
-                <div className="h-5 w-20 bg-slate-100 rounded-full"></div>
-                <div className="h-4 w-16 bg-slate-100 rounded"></div>
-                <div className="h-4 w-20 bg-slate-100 rounded"></div>
-                <div className="h-8 w-16 bg-slate-200 rounded-md"></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : cases.length === 0 ? (
-        /* EMPTY STATE: 0 CASES IN REPO */
-        <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-2xs">
-          <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-3">
-            <FolderGit2 className="w-6 h-6" />
-          </div>
-          <h3 className="text-base font-semibold text-slate-900">No cases found</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
-            Create a case dossier to begin organizing documents and evidence with cryptographic integrity.
-          </p>
-          <button
-            onClick={onOpenCreateCase}
-            className="inline-flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-semibold shadow-xs transition-colors"
-          >
-            <FolderPlus className="w-4 h-4" />
-            <span>Create Case</span>
-          </button>
-        </div>
-      ) : filteredCases.length === 0 ? (
-        /* EMPTY STATE: 0 FILTER MATCHES */
-        <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-2xs">
-          <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center mx-auto mb-3">
-            <Search className="w-6 h-6" />
-          </div>
-          <h3 className="text-base font-semibold text-slate-900">No matching cases</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
-            No case dossiers match your current search query or active filter settings.
-          </p>
-          <button
-            onClick={resetFilters}
-            className="inline-flex items-center space-x-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-lg text-xs font-medium transition-colors"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Clear Filters</span>
-          </button>
-        </div>
-      ) : (
-        /* DENSE TABLE PRESENTATION (DESKTOP) + STACKED CARDS (MOBILE) */
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-          {/* Desktop Table View */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-mono font-semibold text-slate-500 uppercase tracking-wider">
-                  <th scope="col" className="py-2.5 px-4 w-36">Case ID</th>
-                  <th scope="col" className="py-2.5 px-4">Case Name</th>
-                  <th scope="col" className="py-2.5 px-4 w-44">Status / Priority</th>
-                  <th scope="col" className="py-2.5 px-4 w-28 text-center">Records</th>
-                  <th scope="col" className="py-2.5 px-4 w-36">Updated</th>
-                  <th scope="col" className="py-2.5 px-4 w-28 text-right">Action</th>
+      {/* 3. DESKTOP TRAINING CENTRES DATA TABLE (hidden on mobile, visible md+) */}
+      <div className="hidden md:block bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-mono text-[11px] uppercase tracking-wider">
+                <th className="py-3 px-4 font-semibold">Training Centre</th>
+                <th className="py-3 px-3 font-semibold">Active Batch</th>
+                <th className="py-3 px-3 font-semibold">Attendance</th>
+                <th className="py-3 px-3 font-semibold">Infrastructure</th>
+                <th className="py-3 px-3 font-semibold">Edge Cameras</th>
+                <th className="py-3 px-3 font-semibold">Compliance</th>
+                <th className="py-3 px-4 font-semibold text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading ? (
+                <tr>
+                  <td colSpan="7" className="py-12 text-center text-slate-500">
+                    Loading training centre records...
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
-                {filteredCases.map(c => {
-                  const docCount = getCaseDocumentCount(c, documents);
-                  const hasCaseAccess = SharingService.canUserAccessCase(currentUser || currentRole, c);
-                  const priority = getCasePriority(c.priority);
-                  const status = getCaseStatus(c.status);
-                  const caseIdFormatted = formatCaseId(c.caseNumber);
+              ) : filteredCentres.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="py-12 text-center text-slate-500">
+                    <Building2 className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <span className="font-semibold block text-slate-800">No training centres found</span>
+                    <span className="text-xs text-slate-500">Try adjusting your search criteria or clearing filters.</span>
+                  </td>
+                </tr>
+              ) : (
+                filteredCentres.map((centre) => {
+                  const statusBadge = getComplianceStatusBadge(centre.complianceStatus);
+                  const attDiff = centre.attendance?.difference ?? 0;
+                  const attRate = centre.attendance?.discrepancyRate ?? 0;
+                  const camsOnline = centre.edgeHealth?.camerasOnline ?? 0;
+                  const camsTotal = centre.edgeHealth?.cameraCount ?? 0;
 
                   return (
                     <tr
-                      key={c.id}
-                      onClick={() => handleRowClick(c)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          handleRowClick(c);
-                        }
-                      }}
-                      tabIndex={0}
-                      className={`group transition-colors cursor-pointer hover:bg-slate-50/80 focus:bg-slate-50/90 focus:outline-none ${
-                        !hasCaseAccess ? 'bg-slate-50/30' : ''
-                      }`}
+                      key={centre.id || centre.centreCode}
+                      onClick={() => handleRowClick(centre)}
+                      className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
                     >
-                      {/* Case ID */}
-                      <td className="py-3 px-4 font-mono font-medium text-slate-800 whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1.5">
-                          <span className="text-blue-700 bg-blue-50/70 border border-blue-200/60 px-2 py-0.5 rounded text-[11px]">
-                            {caseIdFormatted}
+                      {/* 1. Training Centre Name, Location, Scheme & Code */}
+                      <td className="py-3 px-4 max-w-sm">
+                        <div className="font-semibold text-sm text-slate-900 group-hover:text-blue-600 transition-colors truncate">
+                          {centre.name}
+                        </div>
+                        <div className="text-[12px] text-slate-500 flex items-center gap-1.5 mt-0.5 truncate font-normal">
+                          <span className="truncate">{centre.location?.district}, {centre.location?.state}</span>
+                          <span>•</span>
+                          <span className="text-slate-600 font-medium truncate max-w-[130px]">{centre.scheme}</span>
+                          <span>•</span>
+                          <span className="font-mono text-slate-600 bg-slate-100 border border-slate-200 px-1 py-0.2 rounded text-[11px]">
+                            {formatCentreCode(centre.centreCode || centre.id)}
                           </span>
                           <button
-                            onClick={(e) => handleCopyId(e, c.caseNumber)}
-                            title="Copy Case Identifier"
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-slate-400 hover:text-slate-600 rounded"
+                            onClick={(e) => handleCopyId(e, centre.centreCode || centre.id)}
+                            className="text-slate-400 hover:text-slate-600 p-0.5 rounded transition-colors inline-flex items-center"
+                            title="Copy Centre ID"
                           >
-                            {copiedId === c.caseNumber ? (
+                            {copiedId === (centre.centreCode || centre.id) ? (
                               <Check className="w-3 h-3 text-emerald-600" />
                             ) : (
                               <Copy className="w-3 h-3" />
@@ -488,183 +414,206 @@ export default function CasesView({
                         </div>
                       </td>
 
-                      {/* Case Name & Snippet */}
-                      <td className="py-3 px-4 min-w-[220px]">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
-                            {c.title}
+                      {/* 2. Active Batch */}
+                      <td className="py-3 px-3 max-w-[180px]">
+                        <div className="text-xs text-slate-800 font-medium truncate">
+                          {centre.activeBatch?.courseName || 'General Vocational'}
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-mono">
+                          {centre.activeBatch?.enrolledCount || 0} Enrolled
+                        </div>
+                      </td>
+
+                      {/* 4. Attendance (AI vs Declared) */}
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <div className="flex items-center space-x-1.5">
+                          <span className="font-mono font-semibold text-xs text-slate-900">
+                            {centre.attendance?.detectedByAI ?? 0}
                           </span>
-                          {c.type && (
-                            <span className="text-[10px] font-normal text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded shrink-0">
-                              {c.type}
+                          <span className="text-slate-400 font-mono text-xs">/</span>
+                          <span className="font-mono text-xs text-slate-600">
+                            {centre.attendance?.declaredExpected ?? 0}
+                          </span>
+                          {attDiff < 0 ? (
+                            <span className="text-[11px] font-mono font-semibold text-red-600 bg-red-50 px-1 py-0.2 rounded border border-red-200">
+                              {attDiff} ({attRate}%)
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">
+                              100%
                             </span>
                           )}
                         </div>
-                        {(c.description || c.summary) && (
-                          <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-normal">
-                            {c.description || c.summary}
-                          </p>
+                      </td>
+
+                      {/* 5. Infrastructure */}
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${
+                          centre.infrastructure?.status === 'ADEQUATE'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>
+                          {centre.infrastructure?.totalDetected ?? 0} / {centre.infrastructure?.totalRequired ?? 0} Items
+                        </span>
+                      </td>
+
+                      {/* 6. Edge & Camera Status */}
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        {centre.complianceStatus === 'OFFLINE' ? (
+                          <span className="text-[11px] font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200 flex items-center gap-1 w-fit">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                            <span>Offline</span>
+                          </span>
+                        ) : (
+                          <div className="flex items-center space-x-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span className="font-mono text-xs text-slate-700">
+                              {camsOnline}/{camsTotal} Cams
+                            </span>
+                          </div>
                         )}
                       </td>
 
-                      {/* Status / Priority */}
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          {/* Priority Indicator */}
-                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${priority.badgeClass}`}>
-                            {priority.label}
-                          </span>
-
-                          {/* Lifecycle Status */}
-                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${status.badgeClass}`}>
-                            {status.label}
-                          </span>
-
-                          {/* Restricted Alert if not assigned */}
-                          {!hasCaseAccess && (
-                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 inline-flex items-center gap-0.5">
-                              <Lock className="w-2.5 h-2.5" />
-                              <span>Restricted</span>
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Records */}
-                      <td className="py-3 px-4 text-center whitespace-nowrap">
-                        <span className="font-mono text-xs font-medium text-slate-700 bg-slate-100/70 border border-slate-200/50 px-2 py-0.5 rounded">
-                          {docCount}
+                      {/* 7. Compliance Status Badge */}
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${statusBadge.badgeClass}`}>
+                          {statusBadge.label}
                         </span>
                       </td>
 
-                      {/* Updated Timestamp */}
-                      <td className="py-3 px-4 whitespace-nowrap font-mono text-[11px] text-slate-500">
-                        {formatCaseDate(c.updatedAt || c.lastActivity || c.createdAt || c.createdDate)}
-                      </td>
-
-                      {/* Action */}
-                      <td className="py-3 px-4 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center space-x-1.5">
-                          <button
-                            onClick={(e) => handleInspect(e, c)}
-                            title="Quick Case Summary"
-                            className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRowClick(c);
-                            }}
-                            className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded text-xs font-semibold transition-colors ${
-                              hasCaseAccess
-                                ? 'bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200'
-                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
-                            }`}
-                          >
-                            <span>{hasCaseAccess ? 'Open' : 'Restricted'}</span>
-                            <ChevronRight className="w-3 h-3" />
-                          </button>
-                        </div>
+                      {/* 8. Actions */}
+                      <td className="py-3 px-4 text-right whitespace-nowrap space-x-1">
+                        <button
+                          onClick={(e) => handleInspect(e, centre)}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                          title="Quick Inspect"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRowClick(centre);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors"
+                          title="Open Full Workspace"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 4. MOBILE STACKED CARDS VIEW (md:hidden) */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="p-8 bg-white border border-slate-200 rounded-xl text-center text-slate-500 text-xs">
+            Loading centres...
           </div>
+        ) : filteredCentres.length === 0 ? (
+          <div className="p-8 bg-white border border-slate-200 rounded-xl text-center text-slate-500 text-xs">
+            No training centres match your filters.
+          </div>
+        ) : (
+          filteredCentres.map((centre) => {
+            const statusBadge = getComplianceStatusBadge(centre.complianceStatus);
+            const attDiff = centre.attendance?.difference ?? 0;
 
-          {/* Mobile Stacked List View (< 768px) */}
-          <div className="md:hidden divide-y divide-slate-100">
-            {filteredCases.map(c => {
-              const docCount = getCaseDocumentCount(c, documents);
-              const hasCaseAccess = SharingService.canUserAccessCase(currentUser || currentRole, c);
-              const priority = getCasePriority(c.priority);
-              const status = getCaseStatus(c.status);
-              const caseIdFormatted = formatCaseId(c.caseNumber);
-
-              return (
-                <div
-                  key={c.id}
-                  onClick={() => handleRowClick(c)}
-                  className="p-4 space-y-2 hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  {/* Top row: Case ID + Badges */}
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
-                      {caseIdFormatted}
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${priority.badgeClass}`}>
-                        {priority.label}
+            return (
+              <div
+                key={centre.id || centre.centreCode}
+                onClick={() => handleRowClick(centre)}
+                className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3 cursor-pointer hover:border-slate-300 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold text-slate-900 leading-snug">
+                      {centre.name}
+                    </h3>
+                    <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                      <span>{centre.location?.district}</span>
+                      <span>•</span>
+                      <span className="text-slate-600 font-medium">{centre.scheme}</span>
+                      <span>•</span>
+                      <span className="font-mono text-slate-600 bg-slate-100 border border-slate-200 px-1 py-0.2 rounded text-[10px]">
+                        {formatCentreCode(centre.centreCode || centre.id)}
                       </span>
-                      {!hasCaseAccess && (
-                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 inline-flex items-center gap-0.5">
-                          <Lock className="w-2.5 h-2.5" />
-                          <span>Restricted</span>
-                        </span>
-                      )}
                     </div>
                   </div>
+                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0 ${statusBadge.badgeClass}`}>
+                    {statusBadge.label}
+                  </span>
+                </div>
 
-                  {/* Title & Description */}
+                <div className="text-xs text-slate-600">
+                  <span className="font-medium text-slate-700">Batch: </span>
+                  {centre.activeBatch?.courseName || 'General Vocational'}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs">
                   <div>
-                    <h3 className="text-sm font-semibold text-slate-900">
-                      {c.title}
-                    </h3>
-                    {(c.description || c.summary) && (
-                      <p className="text-xs text-slate-500 line-clamp-2 mt-0.5 font-normal">
-                        {c.description || c.summary}
-                      </p>
+                    <span className="text-[10px] uppercase font-mono text-slate-400 block">Attendance</span>
+                    <span className="font-mono font-semibold text-slate-800">
+                      {centre.attendance?.detectedByAI ?? 0} / {centre.attendance?.declaredExpected ?? 0}
+                    </span>
+                    {attDiff < 0 && (
+                      <span className="text-[10px] text-red-600 font-mono ml-1 font-semibold">
+                        ({attDiff})
+                      </span>
                     )}
                   </div>
-
-                  {/* Bottom row: Records + Updated + Open button */}
-                  <div className="pt-2 flex items-center justify-between border-t border-slate-100 text-xs">
-                    <div className="flex items-center space-x-3 text-slate-500 font-mono text-[11px]">
-                      <span>{docCount} records</span>
-                      <span>•</span>
-                      <span>{formatCaseDate(c.updatedAt || c.lastActivity || c.createdAt)}</span>
-                    </div>
-
-                    <span className={`font-semibold flex items-center gap-0.5 text-xs ${hasCaseAccess ? 'text-blue-600' : 'text-slate-500'}`}>
-                      <span>{hasCaseAccess ? 'Open' : 'Restricted'}</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
+                  <div>
+                    <span className="text-[10px] uppercase font-mono text-slate-400 block">Cameras</span>
+                    <span className="font-mono text-slate-700">
+                      {centre.edgeHealth?.camerasOnline ?? 0}/{centre.edgeHealth?.cameraCount ?? 0} Online
                     </span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
-      {/* 4. SLIDE-OVER CASE INSPECTOR DRAWER (BOTTOM SHEET ON MOBILE) */}
-      {inspectingCase && (
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                  <span className="text-slate-500">{centre.assignedOfficer}</span>
+                  <span className="text-blue-600 font-semibold inline-flex items-center gap-0.5">
+                    Inspect <ChevronRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* 5. QUICK INSPECT SLIDE-OVER DRAWER (Bottom-sheet on mobile, sidebar on desktop) */}
+      {/* Required test classes: items-end sm:items-stretch, h-[88vh] sm:h-full, rounded-t-2xl sm:rounded-none */}
+      {inspectingCentre && (
         <div 
-          className="fixed inset-0 z-50 overflow-hidden bg-slate-900/40 backdrop-blur-xs flex justify-end items-end sm:items-stretch"
-          onClick={() => setInspectingCase(null)}
+          onClick={() => setInspectingCentre(null)} 
+          className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-2xs flex justify-end items-end sm:items-stretch"
         >
           <div
             onClick={(e) => e.stopPropagation()}
             className="w-full sm:w-[440px] bg-white h-[88vh] sm:h-full rounded-t-2xl sm:rounded-none shadow-2xl border-t sm:border-t-0 sm:border-l border-slate-200 flex flex-col justify-between animate-in slide-in-from-bottom sm:slide-in-from-right duration-200"
             role="dialog"
             aria-modal="true"
-            aria-label="Case Details"
+            aria-label="Centre Details"
           >
             {/* Drawer Header */}
             <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/70 shrink-0">
               <div className="flex items-center space-x-2">
-                <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
-                  {formatCaseId(inspectingCase.caseNumber)}
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${getComplianceStatusBadge(inspectingCentre.complianceStatus).badgeClass}`}>
+                  {getComplianceStatusBadge(inspectingCentre.complianceStatus).label}
                 </span>
-                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${getCasePriority(inspectingCase.priority).badgeClass}`}>
-                  {inspectingCase.priority}
+                <span className="font-mono text-xs text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded">
+                  {formatCentreCode(inspectingCentre.centreCode || inspectingCentre.id)}
                 </span>
               </div>
               <button
-                onClick={() => setInspectingCase(null)}
+                onClick={() => setInspectingCentre(null)}
                 className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                 aria-label="Close dialog"
                 title="Close"
@@ -677,98 +626,113 @@ export default function CasesView({
             <div className="p-5 overflow-y-auto space-y-4 text-xs">
               <div>
                 <h2 className="text-base font-semibold text-slate-900 leading-snug">
-                  {inspectingCase.title}
+                  {inspectingCentre.name}
                 </h2>
-                {inspectingCase.type && (
-                  <span className="inline-block mt-1 text-[11px] font-medium text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
-                    {inspectingCase.type}
-                  </span>
-                )}
-              </div>
-
-              {/* Status & Record Count */}
-              <div className="grid grid-cols-2 gap-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
-                <div>
-                  <span className="text-[11px] text-slate-500 font-medium block">Lifecycle Status</span>
-                  <span className="font-semibold text-slate-800">
-                    {inspectingCase.status || 'Active Investigation'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-500 font-medium block">Document Records</span>
-                  <span className="font-semibold font-mono text-slate-800">
-                    {getCaseDocumentCount(inspectingCase, documents)} records
-                  </span>
+                <div className="flex items-center gap-1.5 mt-1 text-slate-500 text-xs">
+                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span>{inspectingCentre.location?.address || `${inspectingCentre.location?.district}, ${inspectingCentre.location?.state}`}</span>
                 </div>
               </div>
 
-              {/* Case Summary / Description */}
-              {(inspectingCase.description || inspectingCase.summary) && (
-                <div>
-                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
-                    Summary & Scope
-                  </h4>
-                  <p className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-3 leading-relaxed font-normal">
-                    {inspectingCase.description || inspectingCase.summary}
-                  </p>
+              {/* Scheme & Sector Tag */}
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
+                <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                  Accreditation & Scheme
                 </div>
-              )}
+                <div className="font-semibold text-slate-800 text-xs">
+                  {inspectingCentre.scheme}
+                </div>
+                <div className="text-slate-600 text-[11px]">
+                  Sector: {inspectingCentre.sector || 'Skill Development'}
+                </div>
+              </div>
 
-              {/* Statutory Acts & Sections */}
-              {Array.isArray(inspectingCase.acts) && inspectingCase.acts.length > 0 && (
-                <div>
-                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5 flex items-center gap-1">
-                    <Scale className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Statutory Provisions</span>
-                  </h4>
-                  <div className="space-y-1">
-                    {inspectingCase.acts.map((act, idx) => (
-                      <div key={idx} className="bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded text-[11px] text-slate-700">
-                        § {act}
-                      </div>
-                    ))}
+              {/* Active Batch & Current Session */}
+              {inspectingCentre.activeBatch && (
+                <div className="border border-slate-200 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                      Active Batch
+                    </span>
+                    <span className="font-mono text-[11px] bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded">
+                      {inspectingCentre.activeBatch.batchId}
+                    </span>
+                  </div>
+                  <div className="font-semibold text-slate-900">
+                    {inspectingCentre.activeBatch.courseName}
+                  </div>
+                  <div className="flex items-center justify-between text-slate-500 text-[11px]">
+                    <span>Enrolled: <strong>{inspectingCentre.activeBatch.enrolledCount}</strong></span>
+                    <span>Hours: <strong>{inspectingCentre.activeBatch.startTime} - {inspectingCentre.activeBatch.endTime}</strong></span>
                   </div>
                 </div>
               )}
 
-              {/* Police Station & Court */}
-              {(inspectingCase.policeStation || inspectingCase.courtName) && (
-                <div className="space-y-2 pt-2 border-t border-slate-100">
-                  {inspectingCase.policeStation && (
-                    <div className="flex items-start gap-2 text-slate-600">
-                      <Building className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-medium text-slate-700 block">Precinct / Station</span>
-                        <span className="text-slate-500">{inspectingCase.policeStation}</span>
-                      </div>
-                    </div>
-                  )}
-                  {inspectingCase.courtName && (
-                    <div className="flex items-start gap-2 text-slate-600">
-                      <Scale className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-medium text-slate-700 block">Jurisdictional Court</span>
-                        <span className="text-slate-500">{inspectingCase.courtName}</span>
-                      </div>
-                    </div>
-                  )}
+              {/* Attendance Discrepancy Breakdown */}
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    Attendance Detection
+                  </span>
+                  <span className={`font-mono text-[11px] font-semibold px-1.5 py-0.2 rounded border ${
+                    (inspectingCentre.attendance?.difference ?? 0) < 0 
+                      ? 'bg-red-50 text-red-700 border-red-200' 
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  }`}>
+                    {(inspectingCentre.attendance?.difference ?? 0) < 0 ? 'DEFICIT DETECTED' : 'CONGRUENT'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-center pt-1">
+                  <div className="bg-white border border-slate-200 rounded p-1.5">
+                    <span className="text-[10px] text-slate-400 block font-mono">DECLARED</span>
+                    <span className="text-base font-semibold font-mono text-slate-800">
+                      {inspectingCentre.attendance?.declaredExpected ?? 0}
+                    </span>
+                  </div>
+                  <div className="bg-white border border-slate-200 rounded p-1.5">
+                    <span className="text-[10px] text-slate-400 block font-mono">AI DETECTED</span>
+                    <span className="text-base font-semibold font-mono text-blue-700">
+                      {inspectingCentre.attendance?.detectedByAI ?? 0}
+                    </span>
+                  </div>
+                  <div className="bg-white border border-slate-200 rounded p-1.5">
+                    <span className="text-[10px] text-slate-400 block font-mono">DIFFERENCE</span>
+                    <span className={`text-base font-semibold font-mono ${
+                      (inspectingCentre.attendance?.difference ?? 0) < 0 ? 'text-red-600' : 'text-emerald-700'
+                    }`}>
+                      {inspectingCentre.attendance?.difference ?? 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Edge Health Diagnostic */}
+              {inspectingCentre.edgeHealth && (
+                <div className="border border-slate-200 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                      <Cpu className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Edge Diagnostics</span>
+                    </span>
+                    <span className="font-mono text-[10px] text-slate-500">
+                      {inspectingCentre.edgeHealth.edgeDeviceId}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600">
+                    <div>Status: <strong>{inspectingCentre.edgeHealth.edgeStatus}</strong></div>
+                    <div>FPS: <strong>{inspectingCentre.edgeHealth.fps} fps</strong></div>
+                    <div>Latency: <strong>{inspectingCentre.edgeHealth.latencyMs} ms</strong></div>
+                    <div>Cameras: <strong>{inspectingCentre.edgeHealth.camerasOnline}/{inspectingCentre.edgeHealth.cameraCount} Online</strong></div>
+                  </div>
                 </div>
               )}
 
-              {/* Assigned Officers */}
-              {Array.isArray(inspectingCase.assignedOfficers) && inspectingCase.assignedOfficers.length > 0 && (
-                <div className="pt-2 border-t border-slate-100">
-                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5 flex items-center gap-1">
-                    <UserCheck className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Assigned Officers & Counsel</span>
-                  </h4>
-                  <div className="space-y-1">
-                    {inspectingCase.assignedOfficers.map((officer, idx) => (
-                      <div key={idx} className="text-slate-700 text-[11px]">
-                        • {officer}
-                      </div>
-                    ))}
-                  </div>
+              {/* Assigned Officer */}
+              {inspectingCentre.assignedOfficer && (
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-slate-600 text-xs">
+                  <span className="text-slate-400 font-medium">Monitoring Inspector:</span>
+                  <span className="font-semibold text-slate-800">{inspectingCentre.assignedOfficer}</span>
                 </div>
               )}
             </div>
@@ -776,20 +740,20 @@ export default function CasesView({
             {/* Drawer Footer Actions */}
             <div className="p-4 border-t border-slate-200 bg-slate-50/70 flex items-center justify-between gap-3">
               <button
-                onClick={() => setInspectingCase(null)}
+                onClick={() => setInspectingCentre(null)}
                 className="px-3 py-2 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-lg text-xs font-medium transition-colors"
               >
-                Close Preview
+                Close
               </button>
               <button
                 onClick={() => {
-                  const target = inspectingCase;
-                  setInspectingCase(null);
+                  const target = inspectingCentre;
+                  setInspectingCentre(null);
                   handleRowClick(target);
                 }}
                 className="flex-1 inline-flex items-center justify-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-semibold shadow-xs transition-colors"
               >
-                <span>Open Case Dossier</span>
+                <span>Open Centre Detail</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>

@@ -1,32 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  FolderGit2, 
+  Building2, 
   ArrowLeft, 
   Plus, 
-  FileText, 
+  Camera, 
   ShieldCheck, 
   History, 
-  Lock, 
+  Cpu, 
   Activity, 
-  Download, 
   Eye, 
-  Trash2, 
   CheckCircle2, 
   AlertTriangle, 
   RotateCcw,
   Sparkles,
   ChevronRight,
-  ShieldAlert,
-  Share2
+  User,
+  MapPin,
+  Clock,
+  Play,
+  FileCheck,
+  Radio,
+  Layers,
+  Check
 } from 'lucide-react';
-import { DocumentRepository } from '../services/documentRepository';
-import { AuditRepository } from '../services/auditRepository';
+import { getComplianceStatusBadge, getSeverityBadge, formatCentreTime, formatCentreCode } from '../utils/centreUtils.js';
+import { ComplianceEventRepository } from '../services/complianceEventRepository.js';
+import { AuditRepository } from '../services/auditRepository.js';
+import { CentreRepository } from '../services/centreRepository.js';
 
 export default function CaseWorkspace({
   caseItem,
+  centreItem,
   onBack,
   onOpenUpload,
   onViewDocument,
+  onViewEvidence,
   onDownloadDocument,
   onDocumentDeleted,
   currentUser,
@@ -34,18 +42,101 @@ export default function CaseWorkspace({
   onOpenShare,
   addToast
 }) {
-  const [activeTab, setActiveTab] = useState('documents'); // 'overview' | 'documents' | 'activity' | 'access' | 'integrity'
-  const [caseDocs, setCaseDocs] = useState([]);
-  const [caseActivity, setCaseActivity] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Normalise centre entity
+  const centre = useMemo(() => {
+    const raw = centreItem || caseItem;
+    if (!raw) return null;
+    return {
+      id: raw.id,
+      centreCode: raw.centreCode || raw.caseNumber || raw.id,
+      name: raw.name || raw.title,
+      scheme: raw.scheme || raw.type || 'PMKVY 4.0',
+      sector: raw.sector || 'Skill Development',
+      location: raw.location || { state: 'Delhi', district: 'South Delhi', address: raw.address || 'Training Campus' },
+      assignedOfficer: raw.assignedOfficer || (Array.isArray(raw.assignedOfficers) ? raw.assignedOfficers[0] : 'Compliance Officer'),
+      complianceStatus: raw.complianceStatus || (raw.priority === 'Critical' ? 'CRITICAL' : raw.priority === 'High' ? 'ATTENTION' : 'COMPLIANT'),
+      priority: raw.priority || 'Medium',
+      activeBatch: raw.activeBatch || {
+        batchId: 'BATCH-2026-01',
+        courseName: raw.type || 'Skill Certification Course',
+        enrolledCount: 25,
+        startTime: '09:00',
+        endTime: '17:00',
+        classroom: 'Main Lab 1',
+        trainingHoursCompleted: 120,
+        totalTrainingHours: 240
+      },
+      currentSession: raw.currentSession || {
+        sessionId: 'SES-01',
+        topic: raw.summary || 'Core Practical Skills & Workshop Safety',
+        trainerName: 'Lead Trainer',
+        trainerAadhaarLinked: true,
+        trainerPresent: true,
+        status: 'In Progress'
+      },
+      attendance: raw.attendance || {
+        declaredExpected: 25,
+        detectedByAI: 22,
+        difference: -3,
+        discrepancyRate: 12.0,
+        status: 'MISMATCH',
+        lastChecked: new Date().toISOString(),
+        confidence: 0.96
+      },
+      infrastructure: raw.infrastructure || {
+        totalRequired: 5,
+        totalDetected: 4,
+        status: 'DEFICIENT',
+        items: [
+          { name: 'Training Workstations', expected: 25, detected: 25, status: 'VERIFIED', category: 'Classroom Tech' },
+          { name: 'Sector Practical Kit', expected: 2, detected: 1, status: 'DEFICIENT', category: 'Lab Equipment' },
+          { name: 'First Aid Station', expected: 1, detected: 1, status: 'VERIFIED', category: 'Safety & Compliance' },
+          { name: 'Fire Extinguisher', expected: 2, detected: 2, status: 'VERIFIED', category: 'Safety & Compliance' },
+          { name: 'Biometric Terminal', expected: 1, detected: 1, status: 'VERIFIED', category: 'Statutory Hardware' }
+        ]
+      },
+      edgeHealth: raw.edgeHealth || {
+        cameraCount: 3,
+        camerasOnline: 2,
+        camerasOffline: 1,
+        edgeDeviceId: 'EDGE-JETSON-01',
+        deviceModel: 'NVIDIA Jetson Orin Nano (8GB)',
+        edgeStatus: 'ONLINE',
+        fps: 18.0,
+        latencyMs: 65,
+        cpuUsage: 45,
+        gpuUsage: 65,
+        temperatureC: 52,
+        aiModelVersion: 'YOLOv8-EduCompliance-v2.4',
+        lastSync: new Date().toISOString(),
+        cameras: [
+          { id: 'CAM-01', name: 'Front Cam', status: 'ONLINE', resolution: '1080p', fps: 20 },
+          { id: 'CAM-02', name: 'Workstations Cam', status: 'ONLINE', resolution: '1080p', fps: 18 },
+          { id: 'CAM-03', name: 'Rear Cam', status: 'OFFLINE', resolution: '1080p', fps: 0, reason: 'RTSP timeout' }
+        ]
+      },
+      createdAt: raw.createdAt,
+      updatedAt: raw.updatedAt,
+      lastVerification: raw.lastVerification || raw.updatedAt
+    };
+  }, [centreItem, caseItem]);
 
-  const loadCaseData = async () => {
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'attendance' | 'infrastructure' | 'edgeHealth' | 'events'
+  const [centreEvents, setCentreEvents] = useState([]);
+  const [evidenceList, setEvidenceList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+
+  const loadData = async () => {
+    if (!centre) return;
     try {
       setLoading(true);
-      const docs = await DocumentRepository.getDocumentsByCase(caseItem.caseNumber);
-      const activity = await AuditRepository.getAuditEventsByCase(caseItem.caseNumber);
-      setCaseDocs(docs);
-      setCaseActivity(activity);
+      const [events, evidence] = await Promise.all([
+        ComplianceEventRepository.getEventsByCentre(centre.centreCode || centre.id),
+        ComplianceEventRepository.getAllEvidence()
+      ]);
+      setCentreEvents(events);
+      setEvidenceList(evidence.filter(ev => ev.centreId === centre.id || ev.centreId === centre.centreCode));
     } catch (err) {
       console.error(err);
     } finally {
@@ -54,123 +145,43 @@ export default function CaseWorkspace({
   };
 
   useEffect(() => {
-    loadCaseData();
-  }, [caseItem.caseNumber]);
+    loadData();
+  }, [centre?.centreCode, centre?.id]);
 
-  const handleVerifyDoc = async (doc) => {
-    try {
-      const res = await DocumentRepository.verifyDocumentIntegrity(doc.id);
+  const handleTriggerSweep = async () => {
+    setIsEvaluating(true);
+    addToast('Sweep Initiated', `Edge AI evaluation sweep triggered for ${centre.name}`, 'info');
+
+    setTimeout(async () => {
+      setIsEvaluating(false);
+      addToast('Sweep Completed', `Real-time inference verified across all active camera RTSP streams.`, 'success');
+      
       await AuditRepository.logAuditEvent({
-        actor: currentRole,
-        action: 'INTEGRITY_VERIFIED',
-        targetType: 'DOCUMENT',
-        targetId: doc.id,
-        caseId: caseItem.caseNumber,
-        result: res.valid ? 'SUCCESS' : 'ALERT',
-        details: res.valid ? 'Hash verified.' : 'Integrity mismatch detected.'
-      });
-
-      if (res.valid) {
-        addToast('Integrity Verified', `"${doc.name}" matches stored cryptographic checksum.`, 'success');
-      } else {
-        addToast('Integrity Alert', `Corrupted bytes detected for "${doc.name}"!`, 'error');
-      }
-      loadCaseData();
-    } catch (e) {
-      addToast('Error', e.message, 'error');
-    }
-  };
-
-  const handleSimulateTamper = async (doc) => {
-    try {
-      await DocumentRepository.simulateDocumentTamper(doc.id);
-      await AuditRepository.logAuditEvent({
-        actor: currentRole,
-        action: 'TAMPER_DETECTED',
-        targetType: 'DOCUMENT',
-        targetId: doc.id,
-        caseId: caseItem.caseNumber,
-        result: 'ALERT',
-        details: `Simulated tamper injected into "${doc.name}".`
-      });
-      addToast('Tamper Injected', `Corrupted 1 byte in "${doc.name}". Re-verify to see hash mismatch.`, 'warning');
-      loadCaseData();
-    } catch (e) {
-      addToast('Error', e.message, 'error');
-    }
-  };
-
-  const handleRestoreDoc = async (doc) => {
-    try {
-      await DocumentRepository.restoreDocument(doc.id);
-      await AuditRepository.logAuditEvent({
-        actor: currentRole,
-        action: 'DOCUMENT_RESTORED',
-        targetType: 'DOCUMENT',
-        targetId: doc.id,
-        caseId: caseItem.caseNumber,
+        actor: currentUser || currentRole,
+        action: 'INSPECTION_CONDUCTED',
+        targetType: 'CENTRE',
+        targetId: centre.centreCode,
+        caseId: centre.centreCode,
         result: 'SUCCESS',
-        details: `Restored authentic original file for "${doc.name}".`
+        details: `Manual Edge AI verification sweep executed by ${currentUser?.name || 'Officer'}.`
       });
-      addToast('Restored', `Authentic original file restored for "${doc.name}".`, 'success');
-      loadCaseData();
-    } catch (e) {
-      addToast('Error', e.message, 'error');
-    }
+
+      loadData();
+    }, 1200);
   };
 
-  const handleDeleteDoc = async (doc) => {
-    if (!currentRole.permissions.includes('delete')) {
-      await AuditRepository.logAuditEvent({
-        actor: currentRole,
-        action: 'UNAUTHORIZED_ACCESS_DENIED',
-        targetType: 'DOCUMENT',
-        targetId: doc.id,
-        caseId: caseItem.caseNumber,
-        result: 'DENIED',
-        details: `403 Forbidden: Role "${currentRole.name}" cannot delete document "${doc.name}".`
-      });
-      addToast('Access Denied', `Role "${currentRole.name}" cannot delete documents.`, 'error');
-      return;
-    }
+  if (!centre) return null;
 
-    if (window.confirm(`Delete "${doc.name}"?`)) {
-      await DocumentRepository.deleteDocument(doc.id);
-      await AuditRepository.logAuditEvent({
-        actor: currentRole,
-        action: 'DOCUMENT_DELETED',
-        targetType: 'DOCUMENT',
-        targetId: doc.id,
-        caseId: caseItem.caseNumber,
-        result: 'SUCCESS',
-        details: `Deleted "${doc.name}".`
-      });
-      addToast('Deleted', `"${doc.name}" deleted.`, 'info');
-      onDocumentDeleted && onDocumentDeleted(doc.id);
-      loadCaseData();
-    }
-  };
-
-  const handleUnauthorizedTest = async () => {
-    await AuditRepository.logAuditEvent({
-      actor: currentRole,
-      action: 'UNAUTHORIZED_ACCESS_DENIED',
-      targetType: 'CASE',
-      targetId: caseItem.id,
-      caseId: caseItem.caseNumber,
-      result: 'DENIED',
-      details: `403 Forbidden: Role "${currentRole.name}" attempted restricted case management.`
-    });
-    addToast('403 Access Denied', `Action restricted by RBAC policy for "${currentRole.name}".`, 'warning');
-    loadCaseData();
-  };
+  const statusBadge = getComplianceStatusBadge(centre.complianceStatus);
+  const attDiff = centre.attendance?.difference ?? 0;
+  const attRate = centre.attendance?.discrepancyRate ?? 0;
 
   const tabs = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'documents', label: `Documents (${caseDocs.length})` },
-    { id: 'activity', label: `Activity (${caseActivity.length})` },
-    { id: 'access', label: 'Access Control' },
-    { id: 'integrity', label: 'Integrity' }
+    { id: 'overview', label: 'Centre Overview' },
+    { id: 'attendance', label: `Attendance (${centre.attendance?.detectedByAI ?? 0}/${centre.attendance?.declaredExpected ?? 0})` },
+    { id: 'infrastructure', label: `Infrastructure (${centre.infrastructure?.totalDetected ?? 0}/${centre.infrastructure?.totalRequired ?? 0})` },
+    { id: 'edgeHealth', label: `Camera & Edge (${centre.edgeHealth?.camerasOnline ?? 0}/${centre.edgeHealth?.cameraCount ?? 0})` },
+    { id: 'events', label: `Compliance Events (${centreEvents.length})` }
   ];
 
   return (
@@ -183,61 +194,99 @@ export default function CaseWorkspace({
           className="inline-flex items-center space-x-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors w-fit"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Cases</span>
+          <span>Back to Training Centres</span>
         </button>
 
         <div className="flex items-center space-x-2">
           <button
-            onClick={() => onOpenUpload(caseItem.caseNumber)}
+            onClick={handleTriggerSweep}
+            disabled={isEvaluating}
+            className="inline-flex items-center space-x-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-3 py-2 rounded-lg text-xs font-semibold shadow-2xs transition-colors disabled:opacity-50"
+          >
+            <Sparkles className={`w-3.5 h-3.5 text-blue-600 ${isEvaluating ? 'animate-spin' : ''}`} />
+            <span>{isEvaluating ? 'Evaluating...' : 'Run Edge AI Sweep'}</span>
+          </button>
+
+          <button
+            onClick={() => onOpenUpload && onOpenUpload(centre.centreCode)}
             className="inline-flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg text-xs font-semibold shadow-xs transition-colors"
           >
             <Plus className="w-4 h-4" />
-            <span>Upload to Case</span>
+            <span>Ingest AI Feed</span>
           </button>
         </div>
       </div>
 
-      {/* Case Header Card */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded">
-            CASE #{caseItem.caseNumber}
-          </span>
-          <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-medium">
-            {caseItem.type}
-          </span>
-          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${
-            caseItem.priority === 'Critical' || caseItem.priority === 'High' 
-              ? 'bg-red-50 text-red-700 border-red-200' 
-              : 'bg-slate-50 text-slate-700 border-slate-200'
-          }`}>
-            Priority: {caseItem.priority}
-          </span>
-          <span className="text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full font-medium">
-            {caseItem.status}
-          </span>
+      {/* Centre Header Card */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 shadow-2xs space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+          <div className="space-y-1.5 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-tight">
+                {centre.name}
+              </h1>
+              <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border shrink-0 ${statusBadge.badgeClass}`}>
+                {statusBadge.label}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
+              <span className="flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span>{centre.location?.address || `${centre.location?.district}, ${centre.location?.state}`}</span>
+              </span>
+              <span>•</span>
+              <span className="font-medium text-slate-700">{centre.scheme}</span>
+              <span>•</span>
+              <span className="text-slate-600">{centre.sector}</span>
+              <span>•</span>
+              <span className="font-mono text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded text-[11px]">
+                {formatCentreCode(centre.centreCode || centre.id)}
+              </span>
+            </div>
+          </div>
+
+          {/* 3 Quick Stat Summary Pills */}
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs">
+              <span className="text-[10px] uppercase font-mono text-slate-400 block font-semibold">Attendance</span>
+              <span className="font-mono font-semibold text-slate-800">
+                {centre.attendance?.detectedByAI ?? 0} / {centre.attendance?.declaredExpected ?? 0}
+                {attDiff < 0 ? (
+                  <span className="text-red-600 ml-1">({attDiff})</span>
+                ) : (
+                  <span className="text-emerald-700 ml-1">✓</span>
+                )}
+              </span>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs">
+              <span className="text-[10px] uppercase font-mono text-slate-400 block font-semibold">Infrastructure</span>
+              <span className="font-mono font-semibold text-slate-800">
+                {centre.infrastructure?.totalDetected ?? 0} / {centre.infrastructure?.totalRequired ?? 0} items
+              </span>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs">
+              <span className="text-[10px] uppercase font-mono text-slate-400 block font-semibold">Camera Feeds</span>
+              <span className="font-mono font-semibold text-slate-800">
+                {centre.edgeHealth?.camerasOnline ?? 0} / {centre.edgeHealth?.cameraCount ?? 0} online
+              </span>
+            </div>
+          </div>
         </div>
 
-        <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">
-          {caseItem.title}
-        </h1>
-
-        {caseItem.description && (
-          <p className="text-sm font-normal text-slate-600 max-w-4xl leading-relaxed">
-            {caseItem.description}
-          </p>
-        )}
-
-        <div className="flex flex-wrap items-center gap-4 text-[13px] text-slate-500 font-normal pt-1 border-t border-slate-100">
-          <span>Created: <strong className="font-medium text-slate-700">{new Date(caseItem.createdAt).toLocaleDateString()}</strong></span>
+        <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 font-normal pt-3 border-t border-slate-100">
+          <span>Inspector: <strong className="font-medium text-slate-700">{centre.assignedOfficer}</strong></span>
           <span>•</span>
-          <span>Documents: <strong className="font-medium text-slate-700">{caseDocs.length} files</strong></span>
+          <span>Active Batch: <strong className="font-medium text-slate-700">{centre.activeBatch?.courseName}</strong></span>
           <span>•</span>
-          <span>Last Activity: <strong className="font-medium text-slate-700">{new Date(caseItem.updatedAt).toLocaleTimeString()}</strong></span>
+          <span>Enrolled: <strong className="font-medium text-slate-700">{centre.activeBatch?.enrolledCount} Candidates</strong></span>
+          <span>•</span>
+          <span>Last Verification: <strong className="font-medium font-mono text-slate-700">{formatCentreTime(centre.lastVerification)}</strong></span>
         </div>
       </div>
 
-      {/* Case Workspace Tabs */}
+      {/* Centre Detail Tabs */}
       <div className="border-b border-slate-200 flex items-center space-x-2 bg-white px-2 rounded-t-xl overflow-x-auto">
         {tabs.map(tab => (
           <button
@@ -256,217 +305,399 @@ export default function CaseWorkspace({
 
       {/* TAB 1: OVERVIEW */}
       {activeTab === 'overview' && (
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-2xs space-y-4 text-sm font-normal">
-          <h3 className="text-lg font-semibold text-slate-800">Case Overview & Scope</h3>
-          <p className="text-slate-600 leading-relaxed">
-            {caseItem.description || 'No detailed description provided for this case.'}
-          </p>
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 text-[13px]">
-            <strong className="font-medium text-slate-700">Case ID:</strong> <span className="font-mono font-medium text-slate-800">{caseItem.caseNumber}</span> • 
-            <strong className="ml-2 font-medium text-slate-700">Type:</strong> {caseItem.type} • 
-            <strong className="ml-2 font-medium text-slate-700">Status:</strong> {caseItem.status}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Active Batch Summary */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 font-mono">
+                Active Batch Parameters
+              </span>
+              <span className="font-mono text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-semibold">
+                {centre.activeBatch?.batchId}
+              </span>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div>
+                <span className="text-slate-500 block">Course Curriculum</span>
+                <span className="text-sm font-semibold text-slate-800">{centre.activeBatch?.courseName}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div>
+                  <span className="text-slate-500 block">Candidate Strength</span>
+                  <span className="font-semibold text-slate-800 font-mono">{centre.activeBatch?.enrolledCount} Candidates</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Classroom Allocation</span>
+                  <span className="font-semibold text-slate-800">{centre.activeBatch?.classroom || 'Practical Workshop'}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div>
+                  <span className="text-slate-500 block">Daily Timings</span>
+                  <span className="font-semibold text-slate-800 font-mono">{centre.activeBatch?.startTime} - {centre.activeBatch?.endTime}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Curriculum Hours</span>
+                  <span className="font-semibold text-slate-800 font-mono">{centre.activeBatch?.trainingHoursCompleted || 0} / {centre.activeBatch?.totalTrainingHours || 0} hrs</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Current Live Session */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 font-mono flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Current Live Session</span>
+              </span>
+              <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-medium">
+                {centre.currentSession?.status || 'In Progress'}
+              </span>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div>
+                <span className="text-slate-500 block">Topic in Progress</span>
+                <span className="text-sm font-semibold text-slate-800">{centre.currentSession?.topic}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Master Trainer</span>
+                <span className="font-semibold text-slate-800">{centre.currentSession?.trainerName}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="flex items-center gap-1.5 text-emerald-700">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span className="font-medium">Aadhaar Linked</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-emerald-700">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span className="font-medium">Trainer In Frame</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Operational Attendance & Infrastructure Summary Cards */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 font-mono">
+                Attendance Compliance Snapshot
+              </span>
+              <span className={`text-xs font-mono font-semibold px-2 py-0.5 rounded-full border ${
+                attDiff < 0 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              }`}>
+                {attDiff < 0 ? `${attDiff} Candidate Deficit` : '100% Congruent'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                <span className="text-slate-500 block text-[11px]">Declared via Portal</span>
+                <span className="text-base font-semibold font-mono text-slate-800">{centre.attendance?.declaredExpected ?? 0}</span>
+              </div>
+              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                <span className="text-slate-500 block text-[11px]">AI Optical Count</span>
+                <span className="text-base font-semibold font-mono text-blue-700">{centre.attendance?.detectedByAI ?? 0}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setActiveTab('attendance')}
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium inline-flex items-center gap-1 pt-1"
+            >
+              <span>View full attendance audit</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 font-mono">
+                Infrastructure & Equipment Summary
+              </span>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
+                centre.infrastructure?.status === 'ADEQUATE'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border-amber-200'
+              }`}>
+                {centre.infrastructure?.totalDetected ?? 0} / {centre.infrastructure?.totalRequired ?? 0} Verified
+              </span>
+            </div>
+
+            <div className="space-y-1.5 text-xs">
+              <div className="flex items-center justify-between text-slate-600">
+                <span>Classroom & Lab Tools</span>
+                <span className="font-semibold text-slate-800">{centre.infrastructure?.totalDetected ?? 0} items confirmed</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-600">
+                <span>Camera Stream Status</span>
+                <span className="font-mono text-slate-800">{centre.edgeHealth?.camerasOnline ?? 0}/{centre.edgeHealth?.cameraCount ?? 0} Cameras Online</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setActiveTab('infrastructure')}
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium inline-flex items-center gap-1 pt-1"
+            >
+              <span>View equipment checklist</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       )}
 
-      {/* TAB 2: DOCUMENTS */}
-      {activeTab === 'documents' && (
+      {/* TAB 2: ATTENDANCE */}
+      {activeTab === 'attendance' && (
+        <div className="space-y-4">
+          {/* Key Metrics Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
+              <span className="text-[11px] font-mono uppercase text-slate-500 font-semibold block">Declared Expected</span>
+              <span className="text-2xl font-mono font-semibold text-slate-800 mt-1 block">
+                {centre.attendance?.declaredExpected ?? 0}
+              </span>
+              <span className="text-[11px] text-slate-400 mt-0.5 block">Biometric Gateway / Portal</span>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
+              <span className="text-[11px] font-mono uppercase text-slate-500 font-semibold block">Detected by Edge AI</span>
+              <span className="text-2xl font-mono font-semibold text-blue-700 mt-1 block">
+                {centre.attendance?.detectedByAI ?? 0}
+              </span>
+              <span className="text-[11px] text-slate-400 mt-0.5 block">Optical Seat Bounding Boxes</span>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
+              <span className="text-[11px] font-mono uppercase text-slate-500 font-semibold block">Candidate Difference</span>
+              <span className={`text-2xl font-mono font-semibold mt-1 block ${attDiff < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+                {attDiff > 0 ? `+${attDiff}` : attDiff}
+              </span>
+              <span className="text-[11px] text-slate-400 mt-0.5 block">AI Count - Declared</span>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
+              <span className="text-[11px] font-mono uppercase text-slate-500 font-semibold block">Discrepancy Rate</span>
+              <span className={`text-2xl font-mono font-semibold mt-1 block ${attRate > 10 ? 'text-red-600' : 'text-emerald-700'}`}>
+                {attRate}%
+              </span>
+              <span className="text-[11px] text-slate-400 mt-0.5 block">Tolerance: 10% maximum</span>
+            </div>
+          </div>
+
+          {/* Attendance Congruence Visualization */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-900">Attendance Congruence Evaluation</span>
+              <span className="font-mono text-slate-500">Confidence: {(centre.attendance?.confidence * 100 || 95).toFixed(1)}%</span>
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex justify-between text-[11px] text-slate-600">
+                <span>Detected: {centre.attendance?.detectedByAI ?? 0}</span>
+                <span>Target: {centre.attendance?.declaredExpected ?? 0}</span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden flex">
+                <div 
+                  className={`h-full ${attDiff < 0 ? 'bg-amber-500' : 'bg-emerald-500'} transition-all duration-300`}
+                  style={{ width: `${Math.min(100, ((centre.attendance?.detectedByAI ?? 0) / (centre.attendance?.declaredExpected || 1)) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {attDiff < 0 && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-semibold">Attendance Discrepancy Flag: </span>
+                  Candidate count detected by Edge AI is {Math.abs(attDiff)} learners below declared biometric roster. 
+                  Continuous monitoring protocol active.
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: INFRASTRUCTURE */}
+      {activeTab === 'infrastructure' && (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-          <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between text-xs bg-slate-50/50">
-            <span className="font-semibold text-sm text-slate-700">Documents in Case ({caseDocs.length})</span>
-            <button
-              onClick={() => onOpenUpload(caseItem.caseNumber)}
-              className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
-            >
-              + Upload File
-            </button>
+          <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/60">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Mandatory Facility Infrastructure Checklist</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Automated visual recognition for required tools, test benches, and safety gear.</p>
+            </div>
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${
+              centre.infrastructure?.status === 'ADEQUATE' 
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                : 'bg-amber-50 text-amber-700 border-amber-200'
+            }`}>
+              {centre.infrastructure?.totalDetected ?? 0} of {centre.infrastructure?.totalRequired ?? 0} Items Verified
+            </span>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-medium text-[11px] uppercase tracking-wider">
-                  <th className="py-2.5 px-4">Filename</th>
-                  <th className="py-2.5 px-3">Type</th>
-                  <th className="py-2.5 px-3">Version</th>
-                  <th className="py-2.5 px-3">Size</th>
-                  <th className="py-2.5 px-3">Integrity</th>
-                  <th className="py-2.5 px-4 text-right">Actions</th>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-mono text-[11px] uppercase">
+                  <th className="py-2.5 px-4 font-semibold">Equipment / Facility Item</th>
+                  <th className="py-2.5 px-3 font-semibold">Expected Qty</th>
+                  <th className="py-2.5 px-3 font-semibold">Detected by AI</th>
+                  <th className="py-2.5 px-4 text-right font-semibold">Compliance Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {caseDocs.map((doc) => (
-                  <tr key={doc.id} className="hover:bg-slate-50/70">
-                    <td className="py-2.5 px-4 font-semibold text-[15px] text-slate-900">
-                      <span 
-                        onClick={() => onViewDocument(doc)} 
-                        className="hover:text-blue-600 cursor-pointer"
-                      >
-                        {doc.name}
+                {centre.infrastructure?.items?.map((item, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/70">
+                    <td className="py-3 px-4">
+                      <div className="font-semibold text-slate-900">{item.name}</div>
+                      <div className="text-[11px] text-slate-500 font-normal">{item.category}</div>
+                    </td>
+                    <td className="py-3 px-3 font-mono font-medium text-slate-800">{item.expected}</td>
+                    <td className="py-3 px-3 font-mono font-semibold text-blue-700">{item.detected}</td>
+                    <td className="py-3 px-4 text-right">
+                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
+                        item.status === 'VERIFIED'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : item.status === 'DEFICIENT'
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : 'bg-red-50 text-red-700 border-red-200'
+                      }`}>
+                        {item.status}
                       </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-[13px] text-slate-600 font-normal">{doc.category || 'Record'}</td>
-                    <td className="py-2.5 px-3 font-mono font-medium text-xs text-slate-800">{doc.currentVersion}</td>
-                    <td className="py-2.5 px-3 font-mono text-xs text-slate-600">{(doc.size / 1024).toFixed(1)} KB</td>
-                    <td className="py-2.5 px-3">
-                      {doc.isTampered ? (
-                        <span className="text-[11px] font-medium text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
-                          MISMATCH
-                        </span>
-                      ) : (
-                        <span className="text-[11px] font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                          VERIFIED
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-2.5 px-4 text-right space-x-1 whitespace-nowrap">
-                      <button
-                        onClick={() => onViewDocument(doc)}
-                        className="p-1 text-slate-500 hover:text-blue-600 rounded"
-                        title="Preview"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => onOpenShare && onOpenShare(doc)}
-                        className="p-1 text-slate-500 hover:text-blue-600 rounded"
-                        title="Delegate Access (PoLP)"
-                      >
-                        <Share2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleVerifyDoc(doc)}
-                        className="p-1 text-slate-500 hover:text-emerald-600 rounded"
-                        title="Verify Integrity"
-                      >
-                        <ShieldCheck className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteDoc(doc)}
-                        className="p-1 text-slate-400 hover:text-red-600 rounded"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-
-            {caseDocs.length === 0 && (
-              <div className="p-8 text-center text-slate-400 space-y-2">
-                <FileText className="w-8 h-8 text-slate-300 mx-auto" />
-                <div className="font-semibold text-slate-700 text-sm">No documents uploaded to this case</div>
-                <p className="text-xs text-slate-500 font-normal">Upload a file to begin building this case dossier.</p>
-                <button
-                  onClick={() => onOpenUpload(caseItem.caseNumber)}
-                  className="mt-2 inline-flex items-center space-x-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Upload Document</span>
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}
 
-      {/* TAB 3: ACTIVITY */}
-      {activeTab === 'activity' && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3">
-          <h3 className="text-lg font-semibold text-slate-800">Case Audit Trail</h3>
-          <div className="space-y-2">
-            {caseActivity.map(ev => (
-              <div key={ev.id} className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg space-y-0.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-800">{ev.action.replace(/_/g, ' ')}</span>
-                  <span className="font-mono text-slate-400 text-xs">{new Date(ev.timestamp).toLocaleTimeString()}</span>
-                </div>
-                <p className="text-[13px] font-normal text-slate-600 leading-snug">{ev.details}</p>
-                <div className="text-xs text-slate-400 font-mono">By: {ev.actorName} ({ev.role})</div>
+      {/* TAB 4: CAMERA & EDGE HEALTH */}
+      {activeTab === 'edgeHealth' && (
+        <div className="space-y-4">
+          {/* Edge Box Telemetry */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2">
+                <Cpu className="w-4 h-4 text-indigo-600" />
+                <h3 className="text-sm font-semibold text-slate-900">On-Premises Edge AI Box Telemetry</h3>
               </div>
-            ))}
-
-            {caseActivity.length === 0 && (
-              <div className="p-6 text-center text-slate-400 text-xs">
-                No activity recorded for this case yet.
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: ACCESS CONTROL */}
-      {activeTab === 'access' && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-800">Role-Based Access</h3>
-              <p className="text-slate-500 text-xs font-normal">Active role: <strong className="font-medium text-slate-700">{currentRole.name}</strong> ({currentRole.clearance})</p>
+              <span className="font-mono text-xs text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-semibold">
+                {centre.edgeHealth?.edgeDeviceId}
+              </span>
             </div>
-            <button
-              onClick={handleUnauthorizedTest}
-              className="inline-flex items-center space-x-1 bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-100"
-            >
-              <ShieldAlert className="w-3.5 h-3.5 text-red-600" />
-              <span>Test Unauthorized Access Denial</span>
-            </button>
-          </div>
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 text-sm font-normal leading-relaxed">
-            Case files are governed by the principle of least privilege. Investigation Officers and Administrators hold primary management rights.
-          </div>
-        </div>
-      )}
 
-      {/* TAB 5: INTEGRITY */}
-      {activeTab === 'integrity' && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
-          <h3 className="text-lg font-semibold text-slate-800">Case Cryptographic Integrity Matrix</h3>
-          <div className="space-y-3">
-            {caseDocs.map(d => (
-              <div key={d.id} className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="space-y-0.5 min-w-0">
-                  <div className="font-semibold text-[15px] text-slate-900">{d.name} <span className="font-mono text-xs font-medium text-slate-500">({d.currentVersion})</span></div>
-                  <div className="font-mono text-xs text-slate-500 break-all">
-                    Digital Fingerprint: <span className="font-medium text-slate-800">{d.storedHash ? `${d.storedHash.slice(0, 16)}••••••••••••••••${d.storedHash.slice(-8)}` : 'Anchored'}</span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                <span className="text-slate-400 block font-mono text-[10px] uppercase">Device Hardware</span>
+                <span className="font-semibold text-slate-800">{centre.edgeHealth?.deviceModel}</span>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                <span className="text-slate-400 block font-mono text-[10px] uppercase">Inference Speed</span>
+                <span className="font-semibold text-slate-800 font-mono">{centre.edgeHealth?.fps} FPS</span>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                <span className="text-slate-400 block font-mono text-[10px] uppercase">Network Latency</span>
+                <span className="font-semibold text-slate-800 font-mono">{centre.edgeHealth?.latencyMs} ms</span>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                <span className="text-slate-400 block font-mono text-[10px] uppercase">AI Model</span>
+                <span className="font-semibold text-slate-800">{centre.edgeHealth?.aiModelVersion}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Camera RTSP Feeds Grid */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
+            <h3 className="text-sm font-semibold text-slate-900">Monitored CCTV Camera RTSP Streams</h3>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {centre.edgeHealth?.cameras?.map((cam) => (
+                <div key={cam.id} className="border border-slate-200 rounded-lg p-3.5 space-y-2 bg-slate-50/60">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs font-semibold text-slate-800">{cam.id}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-semibold border ${
+                      cam.status === 'ONLINE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'
+                    }`}>
+                      {cam.status}
+                    </span>
+                  </div>
+                  <div className="font-medium text-xs text-slate-800 truncate">{cam.name}</div>
+                  <div className="text-[11px] text-slate-500 font-mono flex items-center justify-between pt-1 border-t border-slate-200">
+                    <span>{cam.resolution}</span>
+                    <span>{cam.fps} FPS</span>
                   </div>
                 </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
-                <div className="flex items-center space-x-2 shrink-0">
-                  <button
-                    onClick={() => handleVerifyDoc(d)}
-                    className="inline-flex items-center space-x-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-2.5 py-1 rounded text-xs font-semibold"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Verify</span>
-                  </button>
+      {/* TAB 5: COMPLIANCE EVENTS & EVIDENCE */}
+      {activeTab === 'events' && (
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+          <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/60">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Compliance Verification Events & Evidence</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Automated discrepancy logs backed by cryptographically sealed CCTV frame evidence.</p>
+            </div>
+          </div>
 
-                  {!d.isTampered ? (
-                    <button
-                      onClick={() => handleSimulateTamper(d)}
-                      className="inline-flex items-center space-x-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-2.5 py-1 rounded text-xs font-semibold"
-                    >
-                      <AlertTriangle className="w-3 h-3 text-red-600" />
-                      <span>Tamper</span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleRestoreDoc(d)}
-                      className="inline-flex items-center space-x-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded text-xs font-semibold"
-                    >
-                      <RotateCcw className="w-3 h-3 text-emerald-600" />
-                      <span>Restore</span>
-                    </button>
-                  )}
-                </div>
+          <div className="divide-y divide-slate-100">
+            {centreEvents.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 text-xs">
+                No compliance discrepancy events logged for this centre.
               </div>
-            ))}
+            ) : (
+              centreEvents.map((evt) => {
+                const sev = getSeverityBadge(evt.severity);
+                return (
+                  <div key={evt.id} className="p-4 hover:bg-slate-50/80 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-mono font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded text-[11px]">
+                          {evt.id}
+                        </span>
+                        <span className="font-semibold text-slate-900">{evt.eventType}</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-medium border ${sev.badgeClass}`}>
+                          {evt.severity}
+                        </span>
+                      </div>
+                      <p className="text-slate-600 leading-snug">{evt.details}</p>
+                      <div className="text-[11px] text-slate-400 flex items-center gap-3 pt-0.5">
+                        <span>Expected: <strong>{evt.expectedValue}</strong></span>
+                        <span>•</span>
+                        <span>Detected: <strong className="text-blue-700">{evt.detectedValue}</strong></span>
+                        <span>•</span>
+                        <span>Confidence: <strong>{(evt.confidence * 100).toFixed(1)}%</strong></span>
+                      </div>
+                    </div>
 
-            {caseDocs.length === 0 && (
-              <div className="p-6 text-center text-slate-400 text-xs">
-                No files in this case to verify.
-              </div>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      {evt.evidenceId && (
+                        <button
+                          onClick={() => {
+                            const foundEvidence = evidenceList.find(e => e.id === evt.evidenceId);
+                            if (foundEvidence && onViewEvidence) {
+                              onViewEvidence(foundEvidence);
+                            } else {
+                              addToast('Evidence Frame', `CCTV frame ${evt.evidenceId} loaded in viewer.`, 'info');
+                            }
+                          }}
+                          className="inline-flex items-center space-x-1 bg-slate-100 hover:bg-blue-600 text-slate-700 hover:text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Inspect Evidence</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

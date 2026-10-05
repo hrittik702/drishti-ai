@@ -1,12 +1,13 @@
 import React from 'react';
 import { 
   LayoutDashboard, 
-  FolderOpen, 
-  FileText, 
+  Building2, 
+  AlertTriangle,
   ShieldCheck, 
+  Cpu,
   History, 
   Search, 
-  Lock,
+  Users,
   X,
   ChevronRight
 } from 'lucide-react';
@@ -26,13 +27,22 @@ export default function SidebarNav({
 }) {
   const navItems = [
     { id: 'dashboard', label: 'Overview', icon: LayoutDashboard, badge: null },
-    { id: 'cases', label: 'Cases', icon: FolderOpen, badge: casesCount > 0 ? `${casesCount}` : null },
-    { id: 'documents', label: 'Documents', icon: FileText, badge: documentsCount > 0 ? `${documentsCount}` : null },
-    { id: 'integrity', label: 'Integrity', icon: ShieldCheck, badge: integrityAlertCount > 0 ? `${integrityAlertCount} Alert` : null, alert: integrityAlertCount > 0 },
-    { id: 'audit', label: 'Audit Trail', icon: History, badge: null },
+    { id: 'centres', label: 'Training Centres', icon: Building2, badge: casesCount > 0 ? `${casesCount}` : null },
+    { id: 'events', label: 'Compliance Events', icon: AlertTriangle, badge: integrityAlertCount > 0 ? `${integrityAlertCount} Alert${integrityAlertCount > 1 ? 's' : ''}` : null, alert: integrityAlertCount > 0 },
+    { id: 'evidence', label: 'AI Evidence', icon: ShieldCheck, badge: documentsCount > 0 ? `${documentsCount}` : null },
+    { id: 'integrity', label: 'Edge & Camera Health', icon: Cpu, badge: null },
+    { id: 'audit', label: 'Verification Log', icon: History, badge: null },
     { id: 'search', label: 'Search', icon: Search, badge: null },
-    { id: 'access', label: 'Access Control', icon: Lock, badge: null }
+    { id: 'access', label: 'Users & Roles', icon: Users, badge: null }
   ];
+
+  const isItemActive = (itemId) => {
+    if (currentView === itemId) return true;
+    if (itemId === 'centres' && currentView === 'cases') return true;
+    if (itemId === 'evidence' && currentView === 'documents') return true;
+    if (itemId === 'integrity' && currentView === 'health') return true;
+    return false;
+  };
 
   const handleNavClick = (viewId) => {
     setCurrentView(viewId);
@@ -90,13 +100,13 @@ export default function SidebarNav({
           <nav className="p-3 space-y-1 mt-2">
             {navItems.map(item => {
               const Icon = item.icon;
-              const isActive = currentView === item.id;
+              const isActive = isItemActive(item.id);
 
               return (
                 <button
                   key={item.id}
                   onClick={() => handleNavClick(item.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 min-h-[44px] rounded-lg text-xs font-medium transition-colors ${
+                  className={`w-full flex items-center justify-between px-3 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-colors ${
                     isActive
                       ? 'bg-slate-900 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
