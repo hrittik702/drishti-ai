@@ -5,6 +5,12 @@ import logging
 import os
 import signal
 import sys
+
+# Ensure project root is in sys.path
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 import cv2
 
 from edge.config import EdgeConfig
@@ -207,13 +213,16 @@ def main():
 
             frames_processed += 1
 
-            # Log periodic summary
-            if frames_processed % 30 == 0:
+            # Log periodic runtime summary
+            if frames_processed <= 5 or frames_processed % 10 == 0:
+                cam_label = f"USB {config.camera_index}" if config.source == "usb" else "VIDEO FILE"
                 print(
                     f"Frame {frames_processed:05d} | "
                     f"Persons: {event['detected_persons']} | "
                     f"FPS: {event['fps']:.1f} | "
-                    f"Inference: {event['inference_ms']:.1f}ms"
+                    f"Inference: {event['inference_ms']:.1f}ms | "
+                    f"Camera: {cam_label} | "
+                    f"Status: PROCESSING"
                 )
 
             if video_writer is not None:

@@ -1,3 +1,85 @@
+/* ==================================================
+   DRISHTI AI DESIGN SYSTEM FOUNDATION
+   ================================================== */
+:root {
+  --font-display: 'Inter Tight', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-editorial: 'Cormorant Garamond', Georgia, serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Drishti AI Restrained Editorial Accent System */
+  --color-accent-primary: #18181b;
+  --color-accent-hover: #27272a;
+  --color-accent-active: #09090b;
+  --color-accent-muted: #71717a;
+  --color-accent-subtle: #f4f4f5;
+  --color-accent-border: #e4e4e7;
+  --color-accent-focus: #18181b;
+
+  /* Neural Green Scientific Signal Tokens */
+  --color-neural-primary: #00D6B2;
+  --color-neural-hover: #00b899;
+  --color-neural-subtle: rgba(0, 214, 178, 0.12);
+  --color-neural-glow: rgba(0, 214, 178, 0.45);
+
+  /* Page Gutter: 18px mobile, 32px tablet, 75px desktop */
+  --page-gutter: 18px;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --page-gutter: 32px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --page-gutter: 75px;
+  }
+}
+
+.page-gutter-px {
+  padding-left: var(--page-gutter);
+  padding-right: var(--page-gutter);
+}
+
+/* Explicit typographic primitives */
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-editorial {
+  font-family: var(--font-editorial);
+  font-style: italic;
+}
+
+.font-body {
+  font-family: var(--font-body);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Technical computational surface utilities */
+.technical-surface {
+  background-color: #ffffff;
+  color: #09090b;
+  border-color: #e4e4e7;
+}
+
+.technical-grid {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.technical-hud {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 /* Light Theme Clean Styling & Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
@@ -5,21 +87,23 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #f4f4f5;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #d4d4d8;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #a1a1aa;
 }
 
 /* Global Institutional Typography System */
 html, body {
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: #faf9f6;
+  color: #09090b;
+  font-family: var(--font-body);
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

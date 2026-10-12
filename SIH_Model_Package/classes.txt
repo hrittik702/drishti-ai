@@ -1,0 +1,2 @@
+COCO category ID 1: student (red)
+COCO category ID 2: computer (blue)

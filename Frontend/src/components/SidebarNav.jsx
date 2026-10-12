@@ -9,7 +9,8 @@ import {
   Search, 
   Users,
   X,
-  ChevronRight
+  ChevronRight,
+  MonitorPlay
 } from 'lucide-react';
 import CaseGuardLogo from './CaseGuardLogo';
 import RoleIcon from './RoleIcon';
@@ -27,6 +28,7 @@ export default function SidebarNav({
 }) {
   const navItems = [
     { id: 'dashboard', label: 'Overview', icon: LayoutDashboard, badge: null },
+    { id: 'monitoring', label: 'AI Video Monitoring', icon: MonitorPlay, badge: null },
     { id: 'centres', label: 'Training Centres', icon: Building2, badge: casesCount > 0 ? `${casesCount}` : null },
     { id: 'events', label: 'Compliance Events', icon: AlertTriangle, badge: integrityAlertCount > 0 ? `${integrityAlertCount} Alert${integrityAlertCount > 1 ? 's' : ''}` : null, alert: integrityAlertCount > 0 },
     { id: 'evidence', label: 'AI Evidence', icon: ShieldCheck, badge: documentsCount > 0 ? `${documentsCount}` : null },
