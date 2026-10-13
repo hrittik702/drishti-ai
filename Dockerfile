@@ -7,7 +7,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000 \
     HOST=0.0.0.0 \
     MODEL_MODE=sih \
-    DATA_DIR=/app/data
+    DATA_DIR=/app/data \
+    PYTHONPATH=/app
 
 # Install essential system dependencies:
 # - ffmpeg: Universal H.264 video transcoding for web browser playback
@@ -24,10 +25,10 @@ WORKDIR /app
 
 # Install Python backend dependencies first for layer caching
 COPY requirements-backend.txt .
-RUN pip install --no-cache-dir --timeout 300 --retries 10 numpy
-RUN pip install --no-cache-dir --timeout 300 --retries 10 onnxruntime
-RUN pip install --no-cache-dir --timeout 300 --retries 10 opencv-python-headless
-RUN pip install --no-cache-dir --timeout 300 --retries 10 -r requirements-backend.txt
+RUN pip install --no-cache-dir --default-timeout=100 numpy
+RUN pip install --no-cache-dir --default-timeout=100 onnxruntime
+RUN pip install --no-cache-dir --default-timeout=100 opencv-python-headless
+RUN pip install --default-timeout=100 --retries=5 -r requirements-backend.txt
 
 # Copy backend source code, edge module, and RT-DETRv2 model package
 COPY backend/ ./backend/
