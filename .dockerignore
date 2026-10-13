@@ -1,0 +1,32 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+*.log
+
+# Frontend (hosted independently on Vercel)
+Frontend/
+node_modules/
+
+# Local data & media caches
+data/uploads/*
+!data/uploads/.gitkeep
+data/outputs/*
+!data/outputs/.gitkeep
+data/jobs/*
+!data/jobs/.gitkeep
+
+# Local testing videos
+cctv_v2_annotated.mp4
+test_clip.mp4
+*.tmp
+*.mp4.tmp
+
+# Secrets
+.env
+.env.*
+!.env.example

@@ -1,4 +1,4 @@
-# FastAPI Backend Dependencies for AI Video Monitoring MVP
+# FastAPI Backend Dependencies for Drishti AI Video Monitoring
 fastapi>=0.110.0
 uvicorn[standard]>=0.28.0
 python-multipart>=0.0.9
@@ -7,3 +7,6 @@ pydantic-settings>=2.2.0
 httpx>=0.27.0
 pytest>=8.0.0
 onnxruntime>=1.18.0
+opencv-python-headless>=4.9.0
+numpy>=1.26.0,<3.0.0
+python-dotenv>=1.0.0

@@ -18,6 +18,7 @@ import {
   Users,
   Laptop
 } from 'lucide-react';
+import { apiUrl, resolveMediaUrl } from '../services/api';
 
 export default function VideoMonitoringView({ addToast }) {
   // Backend health & model state
@@ -52,7 +53,7 @@ export default function VideoMonitoringView({ addToast }) {
     setIsCheckingHealth(true);
     setHealthError(null);
     try {
-      const res = await fetch('/api/health');
+      const res = await fetch(apiUrl('/api/health'));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setHealth(data);
@@ -76,7 +77,7 @@ export default function VideoMonitoringView({ addToast }) {
     if (jobId && jobStatus === 'processing') {
       pollIntervalRef.current = setInterval(async () => {
         try {
-          const res = await fetch(`/api/jobs/${jobId}`);
+          const res = await fetch(apiUrl(`/api/jobs/${jobId}`));
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const statusData = await res.json();
 
@@ -112,7 +113,7 @@ export default function VideoMonitoringView({ addToast }) {
   // Fetch results when job finishes
   const fetchResults = async (id) => {
     try {
-      const res = await fetch(`/api/jobs/${id}/results`);
+      const res = await fetch(apiUrl(`/api/jobs/${id}/results`));
       if (!res.ok) throw new Error(`Failed to fetch results (HTTP ${res.status})`);
       const data = await res.json();
       setResults(data);
@@ -162,7 +163,7 @@ export default function VideoMonitoringView({ addToast }) {
     formData.append('video', selectedFile);
 
     try {
-      const res = await fetch('/api/videos', {
+      const res = await fetch(apiUrl('/api/videos'), {
         method: 'POST',
         body: formData
       });
@@ -192,7 +193,7 @@ export default function VideoMonitoringView({ addToast }) {
     setJobError(null);
 
     try {
-      const res = await fetch(`/api/jobs/${jobId}/analyze`, {
+      const res = await fetch(apiUrl(`/api/jobs/${jobId}/analyze`), {
         method: 'POST'
       });
 
@@ -506,7 +507,7 @@ export default function VideoMonitoringView({ addToast }) {
 
             <div className="flex items-center space-x-3">
               <a
-                href={results.output_video_url}
+                href={resolveMediaUrl(results.output_video_url)}
                 download
                 className="px-3 py-1.5 border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center space-x-1.5 transition-colors"
               >
@@ -595,7 +596,7 @@ export default function VideoMonitoringView({ addToast }) {
                     loop
                     muted
                     className="w-full h-full object-contain"
-                    src={results.output_video_url}
+                    src={resolveMediaUrl(results.output_video_url)}
                   >
                     Your browser does not support HTML5 video streaming.
                   </video>

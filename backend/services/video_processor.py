@@ -1,6 +1,7 @@
 """Background video processing service for RT-DETR object detection and visual annotation."""
 
 import subprocess
+import threading
 import time
 import logging
 from pathlib import Path
@@ -14,6 +15,7 @@ from backend.adapters import get_model_adapter
 from backend.services.tracker import ByteTracker
 
 logger = logging.getLogger("backend.services.video_processor")
+job_semaphore = threading.Semaphore(settings.MAX_CONCURRENT_JOBS)
 
 # Colors in BGR format:
 # Student: Emerald Green #00D6B2 -> RGB(0, 214, 178) -> BGR(178, 214, 0)
@@ -108,7 +110,14 @@ def draw_annotations(
 
 
 def process_video_job(job_id: str) -> None:
-    """Execute complete video inference and visual annotation pipeline for a job."""
+    """Execute complete video inference and visual annotation pipeline with concurrency limiting."""
+    logger.info(f"Job {job_id} awaiting execution slot (max concurrent: {settings.MAX_CONCURRENT_JOBS})...")
+    with job_semaphore:
+        _execute_video_job(job_id)
+
+
+def _execute_video_job(job_id: str) -> None:
+    """Internal execution logic for video analysis job."""
     job = job_manager.get_job(job_id)
     if not job:
         logger.error(f"Job {job_id} not found in job store")

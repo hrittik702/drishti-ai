@@ -3,6 +3,7 @@ import Card from '../rec/Card';
 import Button from '../rec/Button';
 import Badge from '../rec/Badge';
 import VideoPlayer from '../VideoPlayer';
+import { resolveMediaUrl } from '../../services/api';
 import {
   Download,
   RotateCcw,
@@ -105,8 +106,15 @@ export default function ResultsView({ results, onAnalyzeAnother }) {
       if (!matchesClass) return false;
 
       if (!query) return true;
+      const isStudent = cname === 'student' || cname === 'person';
+      const entityId = (
+        det.display_id ||
+        (det.track_id ? (isStudent ? `S${String(det.track_id).padStart(2, '0')}` : `C${String(det.track_id).padStart(2, '0')}`) : '')
+      ).toLowerCase();
+
       return (
         cname.includes(query) ||
+        entityId.includes(query) ||
         String(det.track_id || '').includes(query) ||
         String(det.timestamp_seconds).includes(query) ||
         det.timestamp_seconds.toFixed(2).includes(query) ||
@@ -154,7 +162,7 @@ export default function ResultsView({ results, onAnalyzeAnother }) {
         <div className="flex items-center gap-2">
           {results.output_video_url && (
             <a
-              href={results.output_video_url}
+              href={resolveMediaUrl(results.output_video_url)}
               download={`${results.job_id}_annotated.mp4`}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-300 hover:border-zinc-400 bg-white hover:bg-zinc-50 text-xs font-medium text-zinc-800 transition-colors shadow-2xs select-none"
             >
@@ -192,7 +200,7 @@ export default function ResultsView({ results, onAnalyzeAnother }) {
               </div>
               {results.output_video_url && (
                 <a
-                  href={results.output_video_url}
+                  href={resolveMediaUrl(results.output_video_url)}
                   download={`${results.job_id}_annotated.mp4`}
                   className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#008f77] hover:text-[#005f50] transition-colors"
                 >
@@ -206,7 +214,7 @@ export default function ResultsView({ results, onAnalyzeAnother }) {
             <div className="bg-black relative">
               <VideoPlayer
                 ref={videoRef}
-                src={results.output_video_url}
+                src={resolveMediaUrl(results.output_video_url)}
                 fit="contain"
                 autoPlay={false}
                 badgeText="TRACKED VIDEO OUTPUT"
@@ -222,11 +230,11 @@ export default function ResultsView({ results, onAnalyzeAnother }) {
               <div className="flex items-center gap-4">
                 <span className="flex items-center gap-1.5 font-medium">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#00D6B2]" />
-                  <span className="text-zinc-800">Students (#TrackID)</span>
+                  <span className="text-zinc-800">Students (S01, S02...)</span>
                 </span>
                 <span className="flex items-center gap-1.5 font-medium">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#38BDF8]" />
-                  <span className="text-zinc-800">Computers (#TrackID)</span>
+                  <span className="text-zinc-800">Computers (C01, C02...)</span>
                 </span>
               </div>
               <span className="text-zinc-400 text-[10px]">
@@ -342,7 +350,7 @@ export default function ResultsView({ results, onAnalyzeAnother }) {
                   Detection Details
                 </h3>
                 <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 border border-zinc-200">
-                  {allDetections.length} instances
+                  {allDetections.length} frame instances ({uniqueStudents} students · {uniqueComputers} computers)
                 </span>
               </div>
 
@@ -398,7 +406,7 @@ export default function ResultsView({ results, onAnalyzeAnother }) {
                     <table className="w-full text-left border-collapse text-[11px] font-mono whitespace-nowrap">
                       <thead className="sticky top-0 bg-zinc-50 z-10">
                         <tr className="border-b border-zinc-200 text-[10px] text-zinc-500 uppercase tracking-wider">
-                          <th className="py-2 px-3 font-semibold">Track ID</th>
+                          <th className="py-2 px-3 font-semibold">Entity ID</th>
                           <th className="py-2 px-3 font-semibold">Time</th>
                           <th className="py-2 px-3 font-semibold">Frame</th>
                           <th className="py-2 px-3 font-semibold">Class</th>
@@ -415,8 +423,13 @@ export default function ResultsView({ results, onAnalyzeAnother }) {
                           </tr>
                         ) : (
                           paginatedDetections.map((det, idx) => {
-                            const isStudent = det.class_name.toLowerCase() === 'student';
+                            const isStudent = det.class_name.toLowerCase() === 'student' || det.class_name.toLowerCase() === 'person';
                             const isSelected = activeSeekTimestamp === det.timestamp_seconds;
+                            const entityId = det.display_id || (
+                              det.track_id
+                                ? (isStudent ? `S${String(det.track_id).padStart(2, '0')}` : `C${String(det.track_id).padStart(2, '0')}`)
+                                : '—'
+                            );
 
                             return (
                               <tr
@@ -426,8 +439,8 @@ export default function ResultsView({ results, onAnalyzeAnother }) {
                                   isSelected ? 'bg-emerald-50/70' : ''
                                 }`}
                               >
-                                <td className="py-1.5 px-3 font-bold text-zinc-950">
-                                  {det.track_id ? `#${det.track_id}` : '—'}
+                                <td className="py-1.5 px-3 font-bold text-zinc-950 font-mono">
+                                  {entityId}
                                 </td>
                                 <td className="py-1.5 px-3 text-zinc-800">
                                   {det.timestamp_seconds.toFixed(2)}s

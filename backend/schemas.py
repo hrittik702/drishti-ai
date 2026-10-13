@@ -45,11 +45,11 @@ class JobResultsResponse(BaseModel):
     processed_frames: int
     video_duration_seconds: float = 0.0
     total_detections: int
-    frames_with_detections: int = 0
-    throughput_fps: float = 0.0
-    confidence_threshold: float = 0.35
-    frame_sample_interval: int = 3
-    class_counts: Dict[str, int] = Field(default_factory=dict, description="Aggregate detection counts per class")
+    frames_with_detections: int
+    throughput_fps: float
+    confidence_threshold: float
+    frame_sample_interval: int
+    class_counts: Dict[str, int]
     unique_students: int = 0
     unique_computers: int = 0
     student_track_count: int = 0
@@ -58,12 +58,12 @@ class JobResultsResponse(BaseModel):
     tracking_method: str = "ByteTrack"
     frame_detection_instances: int = 0
     tracking_diagnostics: Optional[Dict[str, Any]] = None
-    processing_duration_seconds: float = 0.0
-    detections: List[Detection] = Field(default_factory=list)
+    processing_duration_seconds: float
+    detections: List[Detection]
     output_video_url: Optional[str] = None
     error: Optional[str] = None
-    model_id: str
-    is_mock: bool = Field(False, description="True if output was produced by the assumed mock model")
+    model_id: str = "RT-DETRv2-R18-SIH"
+    is_mock: bool = False
 
 
 class VideoUploadResponse(BaseModel):
@@ -95,4 +95,24 @@ class HealthResponse(BaseModel):
     model_initialized: bool
     model_mode: str
     active_model_id: str
+    is_mock: bool
+
+
+class LivenessResponse(BaseModel):
+    """Basic liveness probe response."""
+    status: str = "ok"
+
+
+class ReadinessResponse(BaseModel):
+    """Dependency and readiness probe response."""
+    status: str = "ready"
+    storage_ready: bool
+    model_ready: bool
+
+
+class ModelStatusResponse(BaseModel):
+    """Inference model state probe response."""
+    model_id: str
+    is_loaded: bool
+    model_mode: str
     is_mock: bool

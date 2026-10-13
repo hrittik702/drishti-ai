@@ -5,6 +5,7 @@ import VideoAnalysisView from './components/views/VideoAnalysisView';
 import ResultsView from './components/views/ResultsView';
 import Toast from './components/Toast';
 import { loadLocal, saveLocal } from './services/db';
+import { apiUrl } from './services/api';
 
 export default function App() {
   // Navigation: 'overview' | 'analysis' | 'results'
@@ -56,7 +57,7 @@ export default function App() {
   // Check backend health on mount
   const checkHealth = async () => {
     try {
-      const res = await fetch('/api/health');
+      const res = await fetch(apiUrl('/api/health'));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setHealth(data);
@@ -93,7 +94,7 @@ export default function App() {
     if (jobId && jobStatus === 'processing') {
       pollIntervalRef.current = setInterval(async () => {
         try {
-          const res = await fetch(`/api/jobs/${jobId}`);
+          const res = await fetch(apiUrl(`/api/jobs/${jobId}`));
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const statusData = await res.json();
 
@@ -130,7 +131,7 @@ export default function App() {
   // Fetch results when job completes
   const handleFetchResults = async (id) => {
     try {
-      const res = await fetch(`/api/jobs/${id}/results`);
+      const res = await fetch(apiUrl(`/api/jobs/${id}/results`));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
@@ -161,7 +162,7 @@ export default function App() {
     formData.append('video', selectedFile);
 
     try {
-      const res = await fetch('/api/videos', {
+      const res = await fetch(apiUrl('/api/videos'), {
         method: 'POST',
         body: formData,
       });
@@ -192,7 +193,7 @@ export default function App() {
     const interval = options.frameSampleInterval !== undefined ? options.frameSampleInterval : frameSampleInterval;
 
     try {
-      const res = await fetch(`/api/jobs/${jobId}/analyze`, {
+      const res = await fetch(apiUrl(`/api/jobs/${jobId}/analyze`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

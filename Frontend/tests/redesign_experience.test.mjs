@@ -137,10 +137,13 @@ test('Results Experience: Summaries, class breakdown, prominent player, and pagi
   assert.match(resultsContent, /Frames Processed/, 'Summary shows Frames Processed');
   assert.match(resultsContent, /Processing Time/, 'Summary shows Processing Time');
 
-  // Collapsible detection details & Track ID column
+  // Collapsible detection details & Entity ID column (S01, S02... / C01, C02...)
   assert.match(resultsContent, /Detection Details/, 'Has Detection Details section');
   assert.match(resultsContent, /detailsOpen/, 'Details section has collapsed toggle state');
-  assert.match(resultsContent, /Track ID/, 'Table includes Track ID column');
+  assert.match(resultsContent, /Entity ID/, 'Table includes Entity ID column');
+  assert.match(resultsContent, /Students \(S01, S02\.\.\.\)/, 'Toolbar legend displays S01, S02... for students');
+  assert.match(resultsContent, /Computers \(C01, C02\.\.\.\)/, 'Toolbar legend displays C01, C02... for computers');
+  assert.doesNotMatch(resultsContent, /#TrackID/, 'Raw tracker ID is removed from user-facing screens');
 
   // Bounded pagination (PAGE_SIZE = 25)
   assert.match(resultsContent, /const PAGE_SIZE = 25/, 'Uses bounded 25-item page size');

@@ -1,9 +1,17 @@
-"""In-memory Job State Management Service."""
+"""Persistent Job State Management Service with JSON storage and restart resilience."""
 
+import json
+import logging
+import time
 import uuid
+from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, Optional, List, Any
-from dataclasses import dataclass, field
+
+from backend.config import settings
+
+logger = logging.getLogger("backend.services.job_manager")
 
 
 @dataclass
@@ -41,12 +49,70 @@ class JobRecord:
     model_id: str = "unknown"
     is_mock: bool = False
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert record to dictionary for JSON persistence."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "JobRecord":
+        """Instantiate record from loaded JSON data."""
+        valid_keys = {f.name for f in cls.__dataclass_fields__.values()}
+        filtered = {k: v for k, v in data.items() if k in valid_keys}
+        return cls(**filtered)
+
 
 class JobManager:
-    """Thread-safe in-memory store for processing jobs."""
+    """Thread-safe file-backed persistent store for video processing jobs."""
 
-    def __init__(self):
+    def __init__(self, storage_dir: Optional[Path] = None):
         self._jobs: Dict[str, JobRecord] = {}
+        self._last_saved_time: Dict[str, float] = {}
+        self.storage_dir = storage_dir or settings.JOBS_DIR
+        self.storage_dir.mkdir(parents=True, exist_ok=True)
+
+    def initialize(self) -> None:
+        """Load persisted jobs from storage directory and recover interrupted jobs."""
+        self.storage_dir.mkdir(parents=True, exist_ok=True)
+        loaded_count = 0
+        interrupted_count = 0
+
+        for path in self.storage_dir.glob("*.json"):
+            if path.name.endswith(".tmp"):
+                continue
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                job = JobRecord.from_dict(data)
+
+                # Recover interrupted jobs that were active when service restarted
+                if job.status in ("processing", "queued"):
+                    job.status = "failed"
+                    job.completed_at = datetime.now(timezone.utc).isoformat()
+                    job.error = "Job interrupted by service restart. Please re-run analysis."
+                    self._persist_job(job)
+                    interrupted_count += 1
+
+                self._jobs[job.job_id] = job
+                loaded_count += 1
+            except Exception as e:
+                logger.warning(f"Failed to load job from {path.name}: {e}")
+
+        logger.info(f"Loaded {loaded_count} persisted jobs from {self.storage_dir} ({interrupted_count} interrupted).")
+
+    def _persist_job(self, job: JobRecord) -> None:
+        """Atomically persist job state to JSON file."""
+        try:
+            self.storage_dir.mkdir(parents=True, exist_ok=True)
+            target = self.storage_dir / f"{job.job_id}.json"
+            temp_target = self.storage_dir / f"{job.job_id}.json.tmp"
+
+            with open(temp_target, "w", encoding="utf-8") as f:
+                json.dump(job.to_dict(), f, indent=2)
+
+            temp_target.replace(target)
+            self._last_saved_time[job.job_id] = time.time()
+        except Exception as e:
+            logger.error(f"Failed to persist job {job.job_id}: {e}")
 
     def create_job(
         self,
@@ -55,7 +121,7 @@ class JobManager:
         confidence_threshold: Optional[float] = None,
         frame_sample_interval: Optional[int] = None,
     ) -> JobRecord:
-        """Create and register a new queued job."""
+        """Create and register a new queued job, persisting initial state to disk."""
         job_id = f"job-{uuid.uuid4().hex[:12]}"
         job = JobRecord(
             job_id=job_id,
@@ -66,20 +132,37 @@ class JobManager:
             frame_sample_interval=frame_sample_interval if frame_sample_interval is not None else 3,
         )
         self._jobs[job_id] = job
+        self._persist_job(job)
         return job
 
     def get_job(self, job_id: str) -> Optional[JobRecord]:
-        """Retrieve job record by ID."""
-        return self._jobs.get(job_id)
+        """Retrieve job record by ID from memory, falling back to disk if not yet loaded."""
+        if job_id in self._jobs:
+            return self._jobs[job_id]
+
+        # Disk fallback
+        job_path = self.storage_dir / f"{job_id}.json"
+        if job_path.exists():
+            try:
+                with open(job_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                job = JobRecord.from_dict(data)
+                self._jobs[job_id] = job
+                return job
+            except Exception as e:
+                logger.error(f"Failed to read persisted job {job_id}: {e}")
+
+        return None
 
     def mark_started(self, job_id: str, total_frames: int = 0) -> None:
-        """Mark job as actively processing."""
+        """Mark job as actively processing and persist state."""
         job = self.get_job(job_id)
         if job:
             job.status = "processing"
             job.started_at = datetime.now(timezone.utc).isoformat()
             job.total_frames = total_frames
             job.progress_percent = 0.0
+            self._persist_job(job)
 
     def update_progress(
         self,
@@ -104,6 +187,11 @@ class JobManager:
             if total_frames > 0:
                 job.progress_percent = round((processed_frames / total_frames) * 100.0, 1)
 
+            # Throttle disk persistence during frame loops to at most once every 2 seconds
+            now = time.time()
+            if now - self._last_saved_time.get(job_id, 0.0) >= 2.0:
+                self._persist_job(job)
+
     def mark_completed(
         self,
         job_id: str,
@@ -123,7 +211,7 @@ class JobManager:
         frame_detection_instances: int = 0,
         tracking_diagnostics: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Mark job as successfully finished and attach prediction and tracking results."""
+        """Mark job as successfully finished and persist complete results to disk."""
         job = self.get_job(job_id)
         if job:
             job.status = "completed"
@@ -145,14 +233,16 @@ class JobManager:
             job.tracking_method = tracking_method
             job.frame_detection_instances = frame_detection_instances
             job.tracking_diagnostics = tracking_diagnostics
+            self._persist_job(job)
 
     def mark_failed(self, job_id: str, error_message: str) -> None:
-        """Mark job as failed with diagnostic error details."""
+        """Mark job as failed with diagnostic error details and persist state."""
         job = self.get_job(job_id)
         if job:
             job.status = "failed"
             job.completed_at = datetime.now(timezone.utc).isoformat()
             job.error = error_message
+            self._persist_job(job)
 
 
 job_manager = JobManager()

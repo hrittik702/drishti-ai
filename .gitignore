@@ -5,15 +5,29 @@ __pycache__/
 .venv/
 venv/
 .env
+.env.*
+!.env.example
 .pytest_cache/
+*.log
 
-# Video Storage
+# Video & Job Storage
 data/uploads/*
 !data/uploads/.gitkeep
 data/outputs/*
 !data/outputs/.gitkeep
+data/jobs/*
+!data/jobs/.gitkeep
+*.tmp
+*.mp4.tmp
 
 # Node / Frontend
 node_modules/
 .npm
 .vite/
+Frontend/dist/
+Frontend/node_modules/
+Frontend/.vercel/
+
+# OS
+.DS_Store
+Thumbs.db
