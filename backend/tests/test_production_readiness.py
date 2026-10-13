@@ -129,3 +129,44 @@ def test_interrupted_job_recovery_on_startup(tmp_path):
     assert job is not None
     assert job.status == "failed"
     assert "interrupted" in job.error.lower()
+
+
+def test_onnx_deployment_starts_without_edge_module(monkeypatch):
+    """Regression test: verify ONNX runtime adapter imports and loads without requiring edge package."""
+    import sys
+    from backend.adapters import get_model_adapter
+
+    # Block 'edge' and its submodules from being imported
+    for mod in list(sys.modules.keys()):
+        if mod == "edge" or mod.startswith("edge."):
+            monkeypatch.delitem(sys.modules, mod, raising=False)
+    monkeypatch.setitem(sys.modules, "edge", None)
+
+    # get_model_adapter("sih") must succeed without attempting to import edge
+    adapter = get_model_adapter("sih")
+    adapter.load_model()
+    assert adapter.is_loaded is True
+    assert adapter.model_id == "RT-DETRv2-R18-SIH"
+    assert adapter.model_mode == "sih"
+
+
+def test_rtdetr_adapter_gracefully_handles_missing_edge(monkeypatch):
+    """Verify PyTorch adapter handles missing edge package with informative diagnostic error."""
+    import sys
+    from backend.adapters.rtdetr_adapter import PyTorchRTDETRAdapter
+
+    # Block 'edge' module
+    for mod in list(sys.modules.keys()):
+        if mod == "edge" or mod.startswith("edge."):
+            monkeypatch.delitem(sys.modules, mod, raising=False)
+    monkeypatch.setitem(sys.modules, "edge", None)
+
+    adapter = PyTorchRTDETRAdapter()
+    assert adapter.model_mode == "pytorch"
+
+    # Attempting to load_model without edge must raise RuntimeError explaining requirement
+    with pytest.raises(RuntimeError) as exc_info:
+        adapter.load_model()
+    assert "edge" in str(exc_info.value).lower()
+    assert "requirements-edge.txt" in str(exc_info.value).lower()
+
